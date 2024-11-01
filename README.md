@@ -11,9 +11,6 @@ The server is designed to support __real-time video streaming and chat__ functio
 
 
 # Milestone
-
-## pdn server
-
 ### server logic
 1. implement socketIO (m) 
 2. refactor CMD logic (m)
