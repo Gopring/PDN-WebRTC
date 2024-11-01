@@ -1,10 +1,11 @@
----   
-name: Feature Request   
-description: Describe the issue or request here   
-title: '[Feature]'       
+---
+name: Feature Request
+about: 'Describe the issue or request here  '
+title: "[Feature]"
 labels: feature
+assignees: ''
 
----   
+---
 
 ### Description:
 <!-- Describe how it currently works. 
