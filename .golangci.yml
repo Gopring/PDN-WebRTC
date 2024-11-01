@@ -1,0 +1,26 @@
+linters:
+  enable:
+    - errcheck
+    - govet
+    - goconst
+    - gocyclo
+    - gofmt
+    - revive
+    - goprintffuncname
+    - gosec
+    - lll
+    - misspell
+    - nakedret
+
+
+run:
+  timeout: 5m
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters-settings:
+  gofmt:
+    simplify: true
