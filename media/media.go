@@ -55,7 +55,7 @@ func (m *Media) AddSender(channelID string, userID string, sdp string) (string, 
 
 // AddReceiver creates a new downstream connection and adds it to the channel.
 func (m *Media) AddReceiver(channelID string, userID string, sdp string) (string, error) {
-	ch := channel.New()
+	ch := m.channels[channelID]
 	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
 	if err != nil {
 		return "", fmt.Errorf("failed to make connection: %w", err)
@@ -70,6 +70,5 @@ func (m *Media) AddReceiver(channelID string, userID string, sdp string) (string
 		return "", fmt.Errorf("failed to start ICE: %w", err)
 	}
 
-	m.channels[channelID] = ch
 	return conn.ServerSDP(), nil
 }
