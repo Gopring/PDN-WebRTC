@@ -11,9 +11,10 @@ type Signaler struct {
 	coordinator *coordinator.Coordinator
 }
 
-func New(m *media.Media) *Signaler {
+func New(m *media.Media, cod *coordinator.Coordinator) *Signaler {
 	return &Signaler{
-		media: m,
+		media:       m,
+		coordinator: cod,
 	}
 }
 

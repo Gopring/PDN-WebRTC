@@ -20,6 +20,13 @@ type Coordinator struct {
 	channels map[string]*Channel
 }
 
+// New creates a new instance of Coordinator.
+func New() *Coordinator {
+	return &Coordinator{
+		channels: map[string]*Channel{},
+	}
+}
+
 // RequestResponse send data to user and wait for response
 func (c *Coordinator) RequestResponse(channelID string, userID string, data string) (string, error) {
 	user, err := c.getUser(channelID, userID)

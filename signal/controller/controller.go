@@ -28,10 +28,11 @@ type Controller struct {
 }
 
 // New creates a new instance of Handler.
-func New(s *signaling.Signaler, isDebug bool) *Controller {
+func New(s *signaling.Signaler, c *coordinator.Coordinator, isDebug bool) *Controller {
 	return &Controller{
-		signaler: s,
-		debug:    isDebug,
+		signaler:    s,
+		coordinator: c,
+		debug:       isDebug,
 	}
 }
 
