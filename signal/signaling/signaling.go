@@ -26,7 +26,7 @@ func (s *Signaler) Receive(signal request.Signal) (string, error) {
 }
 
 func (s *Signaler) Forward(signal request.Signal) (string, error) {
-	return s.media.AddReceiver(signal.ChannelID, signal.UserID, signal.SDP)
+	return s.media.AddForwarder(signal.ChannelID, signal.UserID, signal.SDP)
 }
 
 func (s *Signaler) Fetch(signal request.Signal) (string, error) {
@@ -34,7 +34,7 @@ func (s *Signaler) Fetch(signal request.Signal) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if sdp, err := s.coordinator.Get(signal.ChannelID, forwarderID, "arrange"); err != nil {
+	if sdp, err := s.coordinator.RequestResponse(signal.ChannelID, forwarderID, "arrange"); err != nil {
 		return "", err
 	} else {
 		return sdp, nil
@@ -42,8 +42,10 @@ func (s *Signaler) Fetch(signal request.Signal) (string, error) {
 }
 
 func (s *Signaler) Arrange(signal request.Signal) (string, error) {
-	s.coordinator.Send(signal.ChannelID)
-
+	err := s.coordinator.Deliver(signal.ChannelID, signal.UserID, signal.SDP)
+	if err != nil {
+		return "", err
+	}
 	return "", nil
 }
 

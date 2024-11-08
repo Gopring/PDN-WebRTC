@@ -45,12 +45,12 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	if err := c.coordinator.Add(sig.UserID, s); err != nil {
+	if err := c.coordinator.AddUser(sig.ChannelID, sig.UserID, s); err != nil {
 
 	}
 
 	defer func(sk *socket.Socket) {
-		if err := c.coordinator.Remove(sig.UserID); err != nil {
+		if err := c.coordinator.Remove(sig.ChannelID, sig.UserID); err != nil {
 
 		}
 		if err := sk.Close(); err != nil {
