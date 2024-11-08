@@ -1,3 +1,4 @@
+// Package coordinator contains handling socket more clearly
 package coordinator
 
 import (
@@ -6,57 +7,31 @@ import (
 	"time"
 )
 
+// TODO(window9u): we should add timeout configuration
+const waitResponse = 10 * time.Second
+const waitReceive = 10 * time.Second
+
+// Coordinator managing socket. Coordinator relay messages between users.
 type Coordinator struct {
+	//TODO(window9u): we should add lock for channels
+	//NOTE(window9u): Coordinator may manage user directly (channelID+userID
+	// for key). But future, there is case of broadcast to all user of channel.
+	// This is why managing users in channel
 	channels map[string]*Channel
 }
 
-type Channel struct {
-	users map[string]*User
-}
-
-type User struct {
-	socket   *socket.Socket
-	response chan string
-}
-
-func (u *User) SendToSocket(data string) error {
-	err := u.socket.Write(data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (u *User) WaitForResponse(d time.Duration) (string, error) {
-	select {
-	case sdp := <-u.response:
-		return sdp, nil
-	case <-time.After(d):
-		return "", fmt.Errorf("timeout")
-	}
-}
-
-func (u *User) Enqueue(data string) error {
-	u.response <- data
-	return nil
-}
-
+// RequestResponse send data to user and wait for response
 func (c *Coordinator) RequestResponse(channelID string, userID string, data string) (string, error) {
-	channel, exists := c.channels[channelID]
-	if !exists {
-		return "", fmt.Errorf("channel %s doesn't exists", channelID)
+	user, err := c.getUser(channelID, userID)
+	if err != nil {
+		return "", err
 	}
 
-	user, exists := channel.users[userID]
-	if !exists {
-		return "", fmt.Errorf("user %s doesn't exists", userID)
-	}
-
-	if err := user.SendToSocket(data); err != nil {
+	if err := user.Request(data); err != nil {
 		return "", fmt.Errorf("failed to send user")
 	}
 
-	sdp, err := user.WaitForResponse(10 * time.Second)
+	sdp, err := user.WaitForResponse(waitResponse)
 	if err != nil {
 		return "", err
 	}
@@ -64,10 +39,13 @@ func (c *Coordinator) RequestResponse(channelID string, userID string, data stri
 	return sdp, nil
 }
 
+// AddUser adds user to channel
 func (c *Coordinator) AddUser(channelID string, userID string, s *socket.Socket) error {
 	_, exists := c.channels[channelID]
 	if !exists {
-		c.channels[channelID] = &Channel{}
+		c.channels[channelID] = &Channel{
+			users: map[string]*User{},
+		}
 	}
 	ch := c.channels[channelID]
 	ch.users[userID] = &User{
@@ -77,28 +55,41 @@ func (c *Coordinator) AddUser(channelID string, userID string, s *socket.Socket)
 	return nil
 }
 
-func (c *Coordinator) Deliver(channelID, userID string, data string) error {
-	channel, exists := c.channels[channelID]
-	if !exists {
-		return fmt.Errorf("channel %s doesn't exists", channelID)
+// Response send data to user
+func (c *Coordinator) Response(channelID, userID string, data string) error {
+	user, err := c.getUser(channelID, userID)
+	if err != nil {
+		return err
 	}
-
-	user, exists := channel.users[userID]
-	if !exists {
-		return fmt.Errorf("user %s doesn't exists", userID)
-	}
-
-	if err := user.Enqueue(data); err != nil {
+	if err := user.Response(data, waitReceive); err != nil {
 		return fmt.Errorf("failed to answer %s", userID)
 	}
 	return nil
 }
 
+// Remove removes user from channel
 func (c *Coordinator) Remove(channelID, userID string) error {
 	channel, exists := c.channels[channelID]
 	if !exists {
 		return fmt.Errorf("channel %s doesn't exists", channelID)
 	}
 	delete(channel.users, userID)
+	if len(channel.users) == 0 {
+		delete(c.channels, channelID)
+	}
 	return nil
+}
+
+// getUser returns user from channel
+func (c *Coordinator) getUser(channelID, userID string) (*User, error) {
+	channel, exists := c.channels[channelID]
+	if !exists {
+		return nil, fmt.Errorf("channel %s doesn't exists", channelID)
+	}
+
+	user, exists := channel.users[userID]
+	if !exists {
+		return nil, fmt.Errorf("user %s doesn't exists", userID)
+	}
+	return user, nil
 }

@@ -3,6 +3,7 @@ package controller
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"pdn/signal/controller/socket"
 	"pdn/signal/coordinator"
@@ -38,37 +39,45 @@ func New(s *signaling.Signaler, isDebug bool) *Controller {
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s, err := socket.New(w, r)
 	if err != nil {
+		log.Println(err)
 		return
 	}
 	sig := request.Signal{}
 	if err := s.Read(&sig); err != nil {
-
+		log.Println(err)
+		return
 	}
 
 	if err := c.coordinator.AddUser(sig.ChannelID, sig.UserID, s); err != nil {
-
+		log.Println(err)
+		return
 	}
 
 	defer func(sk *socket.Socket) {
 		if err := c.coordinator.Remove(sig.ChannelID, sig.UserID); err != nil {
-
+			log.Println(err)
+			return
 		}
 		if err := sk.Close(); err != nil {
-
+			log.Println(err)
+			return
 		}
 	}(s)
 
 	for {
 		sig := request.Signal{}
 		if err := s.Read(&sig); err != nil {
-
+			log.Println(err)
+			return
 		}
 		res, err := c.route(sig)
 		if err != nil {
+			log.Println(err)
 			return
 		}
 		if err = s.Write(res); err != nil {
-
+			log.Println(err)
+			return
 		}
 	}
 }

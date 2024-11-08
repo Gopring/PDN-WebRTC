@@ -8,6 +8,7 @@ import (
 	"pdn/media"
 	"pdn/signal/controller"
 	"pdn/signal/middleware"
+	"pdn/signal/signaling"
 	"time"
 )
 
@@ -21,7 +22,8 @@ type Signal struct {
 func New(config Config) *Signal {
 
 	med := media.New()
-	con := controller.New(med, config.Debug)
+	sig := signaling.New(med)
+	con := controller.New(sig, config.Debug)
 	mds := []middleware.Interceptor{
 		middleware.NewAuth(),
 		middleware.NewCORS(),

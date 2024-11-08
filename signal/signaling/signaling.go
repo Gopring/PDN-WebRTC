@@ -42,7 +42,7 @@ func (s *Signaler) Fetch(signal request.Signal) (string, error) {
 }
 
 func (s *Signaler) Arrange(signal request.Signal) (string, error) {
-	err := s.coordinator.Deliver(signal.ChannelID, signal.UserID, signal.SDP)
+	err := s.coordinator.Response(signal.ChannelID, signal.UserID, signal.SDP)
 	if err != nil {
 		return "", err
 	}
