@@ -13,6 +13,7 @@ import (
 type Channel struct {
 	// TODO(window9u): we should add locker for connections.
 	connections map[string]*connection.Connection
+	forwarders  []string
 	upstream    *webrtc.TrackLocalStaticRTP
 }
 
@@ -71,4 +72,12 @@ func (c *Channel) SetDownstream(conn *connection.Connection, id string) error {
 		}
 	}()
 	return nil
+}
+
+func (c *Channel) AddForwarder(id string) {
+	c.forwarders = append(c.forwarders, id)
+}
+
+func (c *Channel) GetForwarder() string {
+	return c.forwarders[0]
 }
