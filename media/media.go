@@ -71,3 +71,27 @@ func (m *Media) AddReceiver(channelID string, userID string, sdp string) (string
 	}
 	return conn.ServerSDP(), nil
 }
+
+func (m *Media) AddForwarder(channelID string, userID string, sdp string) (string, error) {
+	ch := m.channels[channelID]
+	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
+	if err != nil {
+		return "", fmt.Errorf("failed to make connection: %w", err)
+	}
+
+	if err = ch.SetDownstream(conn, userID); err != nil {
+		return "", fmt.Errorf("failed to set downstream: %w", err)
+	}
+
+	err = conn.StartICE()
+	if err != nil {
+		return "", fmt.Errorf("failed to start ICE: %w", err)
+	}
+	ch.AddForwarder(userID)
+
+	return conn.ServerSDP(), nil
+}
+
+func (m *Media) GetForwarder(channelID string) (string, error) {
+	return m.channels[channelID].GetForwarder(), nil
+}
