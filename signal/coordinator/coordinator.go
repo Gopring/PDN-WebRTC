@@ -14,7 +14,7 @@ const waitReceive = 10 * time.Second
 // Coordinator is an interface for managing socket.
 type Coordinator interface {
 	RequestResponse(channelID string, userID string, data string) (string, error)
-	AddUser(channelID string, userID string, s *socket.Socket) error
+	AddUser(channelID string, userID string, s socket.Socket) error
 	Response(channelID, userID string, data string) error
 	Remove(channelID, userID string) error
 }
@@ -55,7 +55,7 @@ func (c *MemoryCoordinator) RequestResponse(channelID string, userID string, dat
 }
 
 // AddUser adds user to channel
-func (c *MemoryCoordinator) AddUser(channelID string, userID string, s *socket.Socket) error {
+func (c *MemoryCoordinator) AddUser(channelID string, userID string, s socket.Socket) error {
 	_, exists := c.channels[channelID]
 	if !exists {
 		c.channels[channelID] = &Channel{

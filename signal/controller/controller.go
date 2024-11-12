@@ -59,7 +59,7 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer func(sk *socket.Socket) {
+	defer func(sk *socket.WebSocket) {
 		if err := c.coordinator.Remove(sig.ChannelID, sig.UserID); err != nil {
 			log.Println(err)
 			return

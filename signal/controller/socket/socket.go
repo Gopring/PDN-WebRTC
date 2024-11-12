@@ -5,32 +5,39 @@ import (
 	"net/http"
 )
 
-type Socket struct {
+// Socket is an interface for managing socket.
+type Socket interface {
+	Close() error
+	Write(data string) error
+	Read(v any) error
+}
+
+type WebSocket struct {
 	conn *websocket.Conn
 }
 
-func New(w http.ResponseWriter, r *http.Request) (*Socket, error) {
+func New(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 	ug := websocket.Upgrader{}
 	conn, err := ug.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &Socket{
+	return &WebSocket{
 		conn: conn,
 	}, nil
 }
 
-func (s *Socket) Close() error {
+func (s *WebSocket) Close() error {
 	return s.conn.Close()
 }
 
-func (s *Socket) Write(data string) error {
+func (s *WebSocket) Write(data string) error {
 	if err := s.conn.WriteMessage(websocket.TextMessage, []byte(data)); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Socket) Read(v any) error {
+func (s *WebSocket) Read(v any) error {
 	return s.conn.ReadJSON(v)
 }
