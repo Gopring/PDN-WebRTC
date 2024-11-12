@@ -11,19 +11,27 @@ import (
 // Func receives user's request and returns sdp
 type Func func(channelID string, userID string, sdp string) (string, error)
 
-// Media contains the channels and connection configuration.
+// Media is an interface for managing channels and connections.
+type Media interface {
+	AddSender(channelID string, userID string, sdp string) (string, error)
+	AddReceiver(channelID string, userID string, sdp string) (string, error)
+	AddForwarder(channelID string, userID string, sdp string) (string, error)
+	GetForwarder(channelID string) (string, error)
+}
+
+// PdnMedia contains the channels and connection configuration.
 // NOTE(window9u): In future, media package could be detached from pdn
 // and be used as a standalone package.
-type Media struct {
+type PdnMedia struct {
 	// TODO(window9u): we should add locker for channels.
 	channels         map[string]*channel.Channel
 	connectionConfig webrtc.Configuration
 }
 
-// New creates a new Media instance.
+// New creates a new PdnMedia instance.
 // TODO(window9u): we should add more configuration options.
-func New() *Media {
-	return &Media{
+func New() *PdnMedia {
+	return &PdnMedia{
 		channels: map[string]*channel.Channel{},
 		connectionConfig: webrtc.Configuration{
 			ICEServers: []webrtc.ICEServer{
@@ -36,7 +44,7 @@ func New() *Media {
 }
 
 // AddSender creates a new upstream connection and adds it to the channel.
-func (m *Media) AddSender(channelID string, userID string, sdp string) (string, error) {
+func (m *PdnMedia) AddSender(channelID string, userID string, sdp string) (string, error) {
 	ch := channel.New()
 	conn, err := connection.NewInbound(m.connectionConfig, sdp)
 	if err != nil {
@@ -54,7 +62,7 @@ func (m *Media) AddSender(channelID string, userID string, sdp string) (string, 
 }
 
 // AddReceiver creates a new downstream connection and adds it to the channel.
-func (m *Media) AddReceiver(channelID string, userID string, sdp string) (string, error) {
+func (m *PdnMedia) AddReceiver(channelID string, userID string, sdp string) (string, error) {
 	ch := m.channels[channelID]
 	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
 	if err != nil {
@@ -72,7 +80,7 @@ func (m *Media) AddReceiver(channelID string, userID string, sdp string) (string
 	return conn.ServerSDP(), nil
 }
 
-func (m *Media) AddForwarder(channelID string, userID string, sdp string) (string, error) {
+func (m *PdnMedia) AddForwarder(channelID string, userID string, sdp string) (string, error) {
 	ch := m.channels[channelID]
 	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
 	if err != nil {
@@ -92,6 +100,6 @@ func (m *Media) AddForwarder(channelID string, userID string, sdp string) (strin
 	return conn.ServerSDP(), nil
 }
 
-func (m *Media) GetForwarder(channelID string) (string, error) {
+func (m *PdnMedia) GetForwarder(channelID string) (string, error) {
 	return m.channels[channelID].GetForwarder(), nil
 }

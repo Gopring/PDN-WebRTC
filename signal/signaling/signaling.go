@@ -6,12 +6,21 @@ import (
 	"pdn/types/api/request"
 )
 
-type Signaler struct {
-	media       *media.Media
-	coordinator *coordinator.Coordinator
+type Signal interface {
+	Send(signal request.Signal) (string, error)
+	Receive(signal request.Signal) (string, error)
+	Forward(signal request.Signal) (string, error)
+	Fetch(signal request.Signal) (string, error)
+	Arrange(signal request.Signal) (string, error)
+	Reconnect(signal request.Signal) (string, error)
 }
 
-func New(m *media.Media, cod *coordinator.Coordinator) *Signaler {
+type Signaler struct {
+	media       media.Media
+	coordinator coordinator.Coordinator
+}
+
+func New(m media.Media, cod coordinator.Coordinator) *Signaler {
 	return &Signaler{
 		media:       m,
 		coordinator: cod,

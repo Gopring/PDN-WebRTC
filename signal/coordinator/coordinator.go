@@ -11,24 +11,32 @@ import (
 const waitResponse = 10 * time.Second
 const waitReceive = 10 * time.Second
 
-// Coordinator managing socket. Coordinator relay messages between users.
-type Coordinator struct {
+// Coordinator is an interface for managing socket.
+type Coordinator interface {
+	RequestResponse(channelID string, userID string, data string) (string, error)
+	AddUser(channelID string, userID string, s *socket.Socket) error
+	Response(channelID, userID string, data string) error
+	Remove(channelID, userID string) error
+}
+
+// MemoryCoordinator managing socket. MemoryCoordinator relay messages between users.
+type MemoryCoordinator struct {
 	//TODO(window9u): we should add lock for channels
-	//NOTE(window9u): Coordinator may manage user directly (channelID+userID
+	//NOTE(window9u): MemoryCoordinator may manage user directly (channelID+userID
 	// for key). But future, there is case of broadcast to all user of channel.
 	// This is why managing users in channel
 	channels map[string]*Channel
 }
 
-// New creates a new instance of Coordinator.
-func New() *Coordinator {
-	return &Coordinator{
+// New creates a new instance of MemoryCoordinator.
+func New() *MemoryCoordinator {
+	return &MemoryCoordinator{
 		channels: map[string]*Channel{},
 	}
 }
 
 // RequestResponse send data to user and wait for response
-func (c *Coordinator) RequestResponse(channelID string, userID string, data string) (string, error) {
+func (c *MemoryCoordinator) RequestResponse(channelID string, userID string, data string) (string, error) {
 	user, err := c.getUser(channelID, userID)
 	if err != nil {
 		return "", err
@@ -47,7 +55,7 @@ func (c *Coordinator) RequestResponse(channelID string, userID string, data stri
 }
 
 // AddUser adds user to channel
-func (c *Coordinator) AddUser(channelID string, userID string, s *socket.Socket) error {
+func (c *MemoryCoordinator) AddUser(channelID string, userID string, s *socket.Socket) error {
 	_, exists := c.channels[channelID]
 	if !exists {
 		c.channels[channelID] = &Channel{
@@ -63,7 +71,7 @@ func (c *Coordinator) AddUser(channelID string, userID string, s *socket.Socket)
 }
 
 // Response send data to user
-func (c *Coordinator) Response(channelID, userID string, data string) error {
+func (c *MemoryCoordinator) Response(channelID, userID string, data string) error {
 	user, err := c.getUser(channelID, userID)
 	if err != nil {
 		return err
@@ -75,7 +83,7 @@ func (c *Coordinator) Response(channelID, userID string, data string) error {
 }
 
 // Remove removes user from channel
-func (c *Coordinator) Remove(channelID, userID string) error {
+func (c *MemoryCoordinator) Remove(channelID, userID string) error {
 	channel, exists := c.channels[channelID]
 	if !exists {
 		return fmt.Errorf("channel %s doesn't exists", channelID)
@@ -88,7 +96,7 @@ func (c *Coordinator) Remove(channelID, userID string) error {
 }
 
 // getUser returns user from channel
-func (c *Coordinator) getUser(channelID, userID string) (*User, error) {
+func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
 	channel, exists := c.channels[channelID]
 	if !exists {
 		return nil, fmt.Errorf("channel %s doesn't exists", channelID)
