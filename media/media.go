@@ -11,14 +11,6 @@ import (
 // Func receives user's request and returns sdp
 type Func func(channelID string, userID string, sdp string) (string, error)
 
-// Media is an interface for managing channels and connections.
-type Media interface {
-	AddSender(channelID string, userID string, sdp string) (string, error)
-	AddReceiver(channelID string, userID string, sdp string) (string, error)
-	AddForwarder(channelID string, userID string, sdp string) (string, error)
-	GetForwarder(channelID string) (string, error)
-}
-
 // PdnMedia contains the channels and connection configuration.
 // NOTE(window9u): In future, media package could be detached from pdn
 // and be used as a standalone package.

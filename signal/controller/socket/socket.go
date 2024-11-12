@@ -1,16 +1,10 @@
+// Package socket provides an interface for managing socket.
 package socket
 
 import (
 	"github.com/gorilla/websocket"
 	"net/http"
 )
-
-// Socket is an interface for managing socket.
-type Socket interface {
-	Close() error
-	Write(data string) error
-	Read(v any) error
-}
 
 type WebSocket struct {
 	conn *websocket.Conn

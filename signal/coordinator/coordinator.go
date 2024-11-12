@@ -11,14 +11,6 @@ import (
 const waitResponse = 10 * time.Second
 const waitReceive = 10 * time.Second
 
-// Coordinator is an interface for managing socket.
-type Coordinator interface {
-	RequestResponse(channelID string, userID string, data string) (string, error)
-	AddUser(channelID string, userID string, s socket.Socket) error
-	Response(channelID, userID string, data string) error
-	Remove(channelID, userID string) error
-}
-
 // MemoryCoordinator managing socket. MemoryCoordinator relay messages between users.
 type MemoryCoordinator struct {
 	//TODO(window9u): we should add lock for channels

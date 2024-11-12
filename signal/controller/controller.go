@@ -20,11 +20,6 @@ const (
 	reconnect = "reconnect"
 )
 
-// Controller is an interface for handling HTTP requests.
-type Controller interface {
-	ServeHTTP(w http.ResponseWriter, r *http.Request)
-}
-
 // SocketController handles HTTP requests.
 type SocketController struct {
 	coordinator coordinator.Coordinator
