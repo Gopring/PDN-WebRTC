@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/stretchr/testify/assert"
 	"pdn/signal"
 	"testing"
 )
@@ -21,5 +22,9 @@ func StartTestSignal() {
 
 func TestBroadcast(t *testing.T) {
 	go StartTestSignal()
+	client, err := New("ws://localhost:8080", "test", "test")
+	assert.NoError(t, err)
+	assert.NoError(t, client.Dial())
+	defer assert.NoError(t, client.Disconnect())
 
 }

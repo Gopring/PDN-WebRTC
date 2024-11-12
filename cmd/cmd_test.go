@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"bytes"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"pdn/cmd"
 	"pdn/signal"
@@ -70,13 +71,12 @@ func TestParseArgs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var output bytes.Buffer
 			got, err := cmd.Parse(&output, tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("parse() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Errorf(t, err, "parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && !got.IsSame(tt.want) {
-				t.Errorf("parse() = %v, want %v", got, tt.want)
-			}
+			assert.NoError(t, err)
+			assert.Truef(t, got.IsSame(tt.want), "parse() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -97,11 +97,13 @@ func createTempFile() (string, error) {
 func TestSetupConfig(t *testing.T) {
 	keyFile, err := createTempFile()
 	if err != nil {
-		t.Fatalf("Failed to create temporary key file: %v", err)
+		assert.Errorf(t, err, "Failed to create temporary key file: %v", err)
+		return
 	}
 	certFile, err := createTempFile()
 	if err != nil {
-		t.Fatalf("Failed to create temporary cert file: %v", err)
+		assert.Errorf(t, err, "Failed to create temporary cert file: %v", err)
+		return
 	}
 
 	// Clean up temporary files after the test
@@ -111,11 +113,11 @@ func TestSetupConfig(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name          string
-		args          []string
-		expected      signal.Config
-		parseError    bool
-		validateError bool
+		name                string
+		args                []string
+		expected            signal.Config
+		expectParseError    bool
+		expectValidateError bool
 	}{
 		{
 			name: "given valid args when setup config then return valid config",
@@ -125,8 +127,8 @@ func TestSetupConfig(t *testing.T) {
 				KeyFile:  keyFile,
 				CertFile: certFile,
 			},
-			parseError:    false,
-			validateError: false,
+			expectParseError:    false,
+			expectValidateError: false,
 		},
 		{
 			name: "given no args when setup config then return default config",
@@ -136,38 +138,38 @@ func TestSetupConfig(t *testing.T) {
 				KeyFile:  "",
 				CertFile: "",
 			},
-			parseError:    false,
-			validateError: false,
+			expectParseError:    false,
+			expectValidateError: false,
 		},
 		{
-			name:          "given invalid port value when setup config then return error",
-			args:          []string{"-port=70000"},
-			parseError:    false,
-			validateError: true,
+			name:                "given invalid port value when setup config then return error",
+			args:                []string{"-port=70000"},
+			expectParseError:    false,
+			expectValidateError: true,
 		},
 		{
-			name:          "given non-existent cert file when setup config then return error",
-			args:          []string{"-port=8080", "-key=" + keyFile, "-cert=/non/existent/cert.pem"},
-			parseError:    false,
-			validateError: true,
+			name:                "given non-existent cert file when setup config then return error",
+			args:                []string{"-port=8080", "-key=" + keyFile, "-cert=/non/existent/cert.pem"},
+			expectParseError:    false,
+			expectValidateError: true,
 		},
 		{
-			name:          "given non-existent key file when setup config then return error",
-			args:          []string{"-port=8080", "-cert=" + certFile, "-key=/non/existent/key.pem"},
-			parseError:    false,
-			validateError: true,
+			name:                "given non-existent key file when setup config then return error",
+			args:                []string{"-port=8080", "-cert=" + certFile, "-key=/non/existent/key.pem"},
+			expectParseError:    false,
+			expectValidateError: true,
 		},
 		{
-			name:          "given invalid flag format when setup config then return error",
-			args:          []string{"-extra"},
-			parseError:    true,
-			validateError: false, // No need to check Validate if parse fails
+			name:                "given invalid flag format when setup config then return error",
+			args:                []string{"-extra"},
+			expectParseError:    true,
+			expectValidateError: false, // No need to check Validate if parse fails
 		},
 		{
-			name:          "given port flag without value when setup config then return error",
-			args:          []string{"-port"},
-			parseError:    true,
-			validateError: false, // No need to check Validate if parse fails
+			name:                "given port flag without value when setup config then return error",
+			args:                []string{"-port"},
+			expectParseError:    true,
+			expectValidateError: false, // No need to check Validate if parse fails
 		},
 		{
 			name: "given empty key file and cert file when setup config then return valid config",
@@ -177,20 +179,20 @@ func TestSetupConfig(t *testing.T) {
 				KeyFile:  "",
 				CertFile: "",
 			},
-			parseError:    false,
-			validateError: false,
+			expectParseError:    false,
+			expectValidateError: false,
 		},
 		{
-			name:          "given empty key file and non-empty cert file when setup config then return error",
-			args:          []string{"-port=8080", "-cert=" + certFile},
-			parseError:    false,
-			validateError: true,
+			name:                "given empty key file and non-empty cert file when setup config then return error",
+			args:                []string{"-port=8080", "-cert=" + certFile},
+			expectParseError:    false,
+			expectValidateError: true,
 		},
 		{
-			name:          "given non-empty key file and empty cert file when setup config then return error",
-			args:          []string{"-port=8080", "-key=" + keyFile},
-			parseError:    false,
-			validateError: true,
+			name:                "given non-empty key file and empty cert file when setup config then return error",
+			args:                []string{"-port=8080", "-key=" + keyFile},
+			expectParseError:    false,
+			expectValidateError: true,
 		},
 	}
 
@@ -201,22 +203,18 @@ func TestSetupConfig(t *testing.T) {
 
 			config, err := cmd.SetupConfig(buf, tt.args)
 
-			if tt.parseError {
-				if err == nil {
-					t.Errorf("SetupConfig() expected parse error, got nil")
-				}
+			if tt.expectParseError {
+				assert.Error(t, err)
 				return
 			}
 
-			if tt.validateError {
-				if err == nil {
-					t.Errorf("SetupConfig() expected Validate error, got nil")
-				}
+			if tt.expectValidateError {
+				assert.Error(t, err)
 				return
 			}
 
 			if !config.IsSame(tt.expected) {
-				t.Errorf("%s: SetupConfig() = %v, expected %v", tt.name, config, tt.expected)
+				assert.Errorf(t, err, "SetupConfig() = %v, expected %v", config, tt.expected)
 			}
 		})
 	}
