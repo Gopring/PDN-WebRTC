@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// ParseArgs parses the command-line arguments and returns the configuration.
+// parse parses the command-line arguments and returns the configuration.
 // It returns an error if the arguments are invalid.
 func TestParseArgs(t *testing.T) {
 	tests := []struct {
@@ -69,13 +69,13 @@ func TestParseArgs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var output bytes.Buffer
-			got, err := cmd.ParseArgs(&output, tt.args)
+			got, err := cmd.Parse(&output, tt.args)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseArgs() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr && !got.IsSame(tt.want) {
-				t.Errorf("ParseArgs() = %v, want %v", got, tt.want)
+				t.Errorf("parse() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -93,7 +93,7 @@ func createTempFile() (string, error) {
 	return tmpFile.Name(), nil
 }
 
-// TestSetupConfig tests the SetupConfig function, including handling errors from ParseArgs and Config.Validate.
+// TestSetupConfig tests the SetupConfig function, including handling errors from parse and Config.Validate.
 func TestSetupConfig(t *testing.T) {
 	keyFile, err := createTempFile()
 	if err != nil {
@@ -161,13 +161,13 @@ func TestSetupConfig(t *testing.T) {
 			name:          "given invalid flag format when setup config then return error",
 			args:          []string{"-extra"},
 			parseError:    true,
-			validateError: false, // No need to check Validate if ParseArgs fails
+			validateError: false, // No need to check Validate if parse fails
 		},
 		{
 			name:          "given port flag without value when setup config then return error",
 			args:          []string{"-port"},
 			parseError:    true,
-			validateError: false, // No need to check Validate if ParseArgs fails
+			validateError: false, // No need to check Validate if parse fails
 		},
 		{
 			name: "given empty key file and cert file when setup config then return valid config",
@@ -197,16 +197,13 @@ func TestSetupConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			originalArgs := os.Args
-			defer func() { os.Args = originalArgs }()
+			buf := bytes.NewBuffer(make([]byte, 1024))
 
-			os.Args = append([]string{"cmd"}, tt.args...)
-
-			config, err := cmd.SetupConfig()
+			config, err := cmd.SetupConfig(buf, tt.args)
 
 			if tt.parseError {
 				if err == nil {
-					t.Errorf("SetupConfig() expected ParseArgs error, got nil")
+					t.Errorf("SetupConfig() expected parse error, got nil")
 				}
 				return
 			}
