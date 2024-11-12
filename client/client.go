@@ -2,52 +2,63 @@
 package client
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 	"io"
-	"net/http"
 	"pdn/types/api/request"
+)
+
+// message type
+const (
+	RECEIVE = "RECEIVE"
+	SEND    = "SEND"
+	FORWARD = "FORWARD"
+	ARRANGE = "ARRANGE"
+	FETCH   = "FETCH"
 )
 
 // Client is user of pdn. this client will be used for test.
 type Client struct {
-	Type       string
 	userID     string
-	localTrack *webrtc.TrackLocalStaticRTP
 	channelID  string
+	serverURL  string
+	localTrack *webrtc.TrackLocalStaticRTP
 	conn       *websocket.Conn
 }
 
-// NewClient creates a new WebSocket client.
-func NewClient(serverURL, clientType, userID, channelID string) (*Client, error) {
-	wsConn, _, err := websocket.DefaultDialer.Dial(serverURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
-	}
+// New creates a new WebSocket client.
+func New(serverURL, userID, channelID string) (*Client, error) {
 	return &Client{
-		Type:      clientType,
+		serverURL: serverURL,
 		userID:    userID,
 		channelID: channelID,
-		conn:      wsConn,
 	}, nil
 }
 
-// closeConnection gracefully closes the WebSocket connection.
-func (c *Client) closeConnection() {
-	if c.conn != nil {
-		c.conn.Close()
+func (c *Client) Dial() error {
+	wsConn, _, err := websocket.DefaultDialer.Dial(c.serverURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to Dial %w", err)
 	}
+	c.conn = wsConn
+	return nil
 }
 
-// SendSignal sends a signal to the WebSocket server and receives a response.
-func (c *Client) SendSignal(signal request.Signal) (string, error) {
+// Disconnect gracefully closes the WebSocket connection.
+func (c *Client) Disconnect() error {
+	if c.conn == nil {
+		return fmt.Errorf("connection doesn't exist")
+	}
+	return c.conn.Close()
+}
+
+// signaling sends a signal to the WebSocket server and receives a response.
+func (c *Client) signaling(signal request.Signal) (string, error) {
 	// Send the signal as JSON to the WebSocket server
 	if err := c.conn.WriteJSON(signal); err != nil {
-		return "", fmt.Errorf("failed to send signal: %w", err)
+		return "", fmt.Errorf("failed to SEND signal: %w", err)
 	}
 
 	// Read the response
@@ -59,7 +70,53 @@ func (c *Client) SendSignal(signal request.Signal) (string, error) {
 	return string(message), nil
 }
 
-func (c *Client) Receive(f func(*webrtc.TrackRemote, *webrtc.RTPReceiver), serverURL string) error {
+// Send sends a local track to the server.
+func (c *Client) Send(localTrack *webrtc.TrackLocalStaticRTP) error {
+	// 1. Create a new peer connection
+	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		return err
+	}
+
+	// 2. Create an SDP offer to start broadcasting
+	offer, err := conn.CreateOffer(&webrtc.OfferOptions{})
+	if err != nil {
+		return err
+	}
+
+	// 3. Add track to SEND
+	sender, err := conn.AddTrack(localTrack)
+	go func() {
+		rtcpBuf := make([]byte, 1500)
+		for {
+			if _, _, rtcpErr := sender.Read(rtcpBuf); rtcpErr != nil {
+				return
+			}
+		}
+	}()
+
+	// 4. Send the offer (SDP) to the server to initiate broadcasting
+	//    and RECEIVE the server's SDP answer.
+	signal := request.Signal{
+		Type:      SEND,
+		ChannelID: c.channelID,
+		UserID:    c.userID,
+		SDP:       offer.SDP,
+	}
+	remoteSDP, err := c.signaling(signal)
+	if err != nil {
+		return err
+	}
+	// 5. Set the server's SDP answer as the remote description for broadcasting
+	if err = conn.SetRemoteDescription(webrtc.SessionDescription{
+		Type: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func (c *Client) Receive(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) error {
 	// 1. Create a new peer connection
 	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -70,18 +127,18 @@ func (c *Client) Receive(f func(*webrtc.TrackRemote, *webrtc.RTPReceiver), serve
 	if err != nil {
 		return err
 	}
-	// 3. Add track to send
-	conn.OnTrack(f)
+	// 3. Add track to SEND
+	conn.OnTrack(consume)
 
 	// 4. Send the offer (SDP) to the server to initiate broadcasting
-	//    and receive the server's SDP answer.
+	//    and RECEIVE the server's SDP answer.
 	signal := request.Signal{
-		Type:      c.Type,
+		Type:      RECEIVE,
 		ChannelID: c.channelID,
 		UserID:    c.userID,
 		SDP:       offer.SDP,
 	}
-	remoteSDP, err := c.SendSignal(signal)
+	remoteSDP, err := c.signaling(signal)
 	if err != nil {
 		return err
 	}
@@ -93,9 +150,9 @@ func (c *Client) Receive(f func(*webrtc.TrackRemote, *webrtc.RTPReceiver), serve
 	return nil
 }
 
-func (c *Client) Fetch(localTrack *webrtc.TrackLocalStaticRTP, serverURL string) error {
-	//NOTE(window9u): fetch logic is same as receive. For clients, it is same
-	// that send their SDP and get SDP from server. But now, we detach for test and
+func (c *Client) Fetch(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) error {
+	//NOTE(window9u): FETCH logic is same as RECEIVE. For clients, it is same
+	// that SEND their SDP and get SDP from server. But now, we detach for test and
 	// make it more explicit.
 
 	// 1. Create a new peer connection
@@ -108,26 +165,18 @@ func (c *Client) Fetch(localTrack *webrtc.TrackLocalStaticRTP, serverURL string)
 	if err != nil {
 		return err
 	}
-	// 3. Add track to send
-	sender, err := conn.AddTrack(localTrack)
-	go func() {
-		rtcpBuf := make([]byte, 1500)
-		for {
-			if _, _, rtcpErr := sender.Read(rtcpBuf); rtcpErr != nil {
-				return
-			}
-		}
-	}()
+	// 3. Add track to SEND
+	conn.OnTrack(consume)
 
 	// 4. Send the offer (SDP) to the server to initiate broadcasting
-	//    and receive the server's SDP answer.
+	//    and RECEIVE the server's SDP answer.
 	signal := request.Signal{
-		Type:      c.Type,
+		Type:      FETCH,
 		ChannelID: c.channelID,
 		UserID:    c.userID,
 		SDP:       offer.SDP,
 	}
-	remoteSDP, err := c.SendSignal(signal)
+	remoteSDP, err := c.signaling(signal)
 	if err != nil {
 		return err
 	}
@@ -139,7 +188,7 @@ func (c *Client) Fetch(localTrack *webrtc.TrackLocalStaticRTP, serverURL string)
 	return nil
 }
 
-func (c *Client) Forward(serverURL string) error {
+func (c *Client) Forward() error {
 	// 1. Create a new peer connection
 	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -150,7 +199,7 @@ func (c *Client) Forward(serverURL string) error {
 	if err != nil {
 		return err
 	}
-	// 3. Add track to send
+	// 3. Add track to SEND
 	conn.OnTrack(func(remoteTrack *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		var newTrackErr error
 		c.localTrack, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", c.userID)
@@ -171,14 +220,14 @@ func (c *Client) Forward(serverURL string) error {
 	})
 
 	// 4. Send the offer (SDP) to the server to initiate broadcasting
-	//    and receive the server's SDP answer.
+	//    and RECEIVE the server's SDP answer.
 	signal := request.Signal{
-		Type:      c.Type,
+		Type:      FORWARD,
 		ChannelID: c.channelID,
 		UserID:    c.userID,
 		SDP:       offer.SDP,
 	}
-	remoteSDP, err := c.SendSignal(signal)
+	remoteSDP, err := c.signaling(signal)
 	if err != nil {
 		return err
 	}
@@ -190,9 +239,9 @@ func (c *Client) Forward(serverURL string) error {
 	return nil
 }
 
-func (c *Client) Arrange(offer string, serverURL string) error {
-	// server request arrange to forward to fetcher. client arrange
-	// their SDP and send it to server. and server toss it to fetcher.
+func (c *Client) Arrange(offer string) error {
+	// server request ARRANGE to FORWARD to fetcher. client ARRANGE
+	// their SDP and SEND it to server. and server toss it to fetcher.
 	// so it makes connections with fetcher and forwarder.
 
 	// 1. Create a new peer connection
@@ -210,7 +259,7 @@ func (c *Client) Arrange(offer string, serverURL string) error {
 	if err != nil {
 		return err
 	}
-	// 3. Add track to send
+	// 3. Add track to SEND
 	sender, err := conn.AddTrack(c.localTrack)
 	if err != nil {
 		return err
@@ -224,17 +273,17 @@ func (c *Client) Arrange(offer string, serverURL string) error {
 			}
 		}
 	}()
-	data, err := json.Marshal(request.Signal{
-		Type:      c.Type,
+
+	sig := request.Signal{
+		Type:      ARRANGE,
 		ChannelID: c.channelID,
 		UserID:    c.userID,
 		SDP:       answer.SDP,
-	})
-	// 6. Set sdp answer to the server for broadcasting
-	res, err := http.Post(serverURL, "application/json", bytes.NewReader(data))
-	if res.StatusCode >= 400 {
-		return fmt.Errorf("fails")
 	}
 
+	// 6. Set sdp answer to the server for broadcasting
+	if _, err := c.signaling(sig); err != nil {
+		return err
+	}
 	return nil
 }
