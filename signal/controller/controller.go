@@ -20,16 +20,16 @@ const (
 	reconnect = "reconnect"
 )
 
-// Controller handles HTTP requests.
-type Controller struct {
-	coordinator *coordinator.Coordinator
-	signaler    *signaling.Signaler
+// SocketController handles HTTP requests.
+type SocketController struct {
+	coordinator coordinator.Coordinator
+	signaler    signaling.Signal
 	debug       bool
 }
 
 // New creates a new instance of Handler.
-func New(s *signaling.Signaler, c *coordinator.Coordinator, isDebug bool) *Controller {
-	return &Controller{
+func New(s signaling.Signal, c *coordinator.MemoryCoordinator, isDebug bool) *SocketController {
+	return &SocketController{
 		signaler:    s,
 		coordinator: c,
 		debug:       isDebug,
@@ -37,7 +37,7 @@ func New(s *signaling.Signaler, c *coordinator.Coordinator, isDebug bool) *Contr
 }
 
 // ServeHTTP handles HTTP requests.
-func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s, err := socket.New(w, r)
 	if err != nil {
 		log.Println(err)
@@ -54,7 +54,7 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer func(sk *socket.Socket) {
+	defer func(sk *socket.WebSocket) {
 		if err := c.coordinator.Remove(sig.ChannelID, sig.UserID); err != nil {
 			log.Println(err)
 			return
@@ -84,7 +84,7 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // route routes a parsed request based on its type
-func (c *Controller) route(signal request.Signal) (string, error) {
+func (c *SocketController) route(signal request.Signal) (string, error) {
 	switch signal.Type {
 	case send:
 		return c.signaler.Send(signal)

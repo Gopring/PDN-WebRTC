@@ -1,3 +1,4 @@
+// Package coordinator contains handling socket more clearly
 package coordinator
 
 // Channel manages users.

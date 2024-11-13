@@ -1,3 +1,4 @@
+// Package coordinator contains handling socket more clearly
 package coordinator
 
 import (
@@ -9,7 +10,7 @@ import (
 // User controls socket and relay message
 type User struct {
 	//TODO(window9u): we should add lock for concurrent access
-	socket   *socket.Socket
+	socket   socket.Socket
 	response chan string
 }
 

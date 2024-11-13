@@ -6,31 +6,37 @@ import (
 	"pdn/types/api/request"
 )
 
-type Signaler struct {
-	media       *media.Media
-	coordinator *coordinator.Coordinator
+// SignalHandler is a struct for signaling.
+type SignalHandler struct {
+	media       media.Media
+	coordinator coordinator.Coordinator
 }
 
-func New(m *media.Media, cod *coordinator.Coordinator) *Signaler {
-	return &Signaler{
+// New creates a new instance of SignalHandler.
+func New(m media.Media, cod coordinator.Coordinator) *SignalHandler {
+	return &SignalHandler{
 		media:       m,
 		coordinator: cod,
 	}
 }
 
-func (s *Signaler) Send(signal request.Signal) (string, error) {
+// Send sends a signal.
+func (s *SignalHandler) Send(signal request.Signal) (string, error) {
 	return s.media.AddSender(signal.ChannelID, signal.UserID, signal.SDP)
 }
 
-func (s *Signaler) Receive(signal request.Signal) (string, error) {
+// Receive receives a signal.
+func (s *SignalHandler) Receive(signal request.Signal) (string, error) {
 	return s.media.AddReceiver(signal.ChannelID, signal.UserID, signal.SDP)
 }
 
-func (s *Signaler) Forward(signal request.Signal) (string, error) {
+// Forward forwards a signal.
+func (s *SignalHandler) Forward(signal request.Signal) (string, error) {
 	return s.media.AddForwarder(signal.ChannelID, signal.UserID, signal.SDP)
 }
 
-func (s *Signaler) Fetch(signal request.Signal) (string, error) {
+// Fetch fetches a signal.
+func (s *SignalHandler) Fetch(signal request.Signal) (string, error) {
 	forwarderID, err := s.media.GetForwarder(signal.ChannelID)
 	if err != nil {
 		return "", err
@@ -42,7 +48,8 @@ func (s *Signaler) Fetch(signal request.Signal) (string, error) {
 	}
 }
 
-func (s *Signaler) Arrange(signal request.Signal) (string, error) {
+// Arrange arranges a signal.
+func (s *SignalHandler) Arrange(signal request.Signal) (string, error) {
 	err := s.coordinator.Response(signal.ChannelID, signal.UserID, signal.SDP)
 	if err != nil {
 		return "", err
@@ -50,6 +57,7 @@ func (s *Signaler) Arrange(signal request.Signal) (string, error) {
 	return "", nil
 }
 
-func (s *Signaler) Reconnect(signal request.Signal) (string, error) {
+// Reconnect reconnects a signal.
+func (s *SignalHandler) Reconnect(signal request.Signal) (string, error) {
 	return s.media.AddReceiver(signal.ChannelID, signal.UserID, signal.SDP)
 }
