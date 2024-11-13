@@ -28,7 +28,9 @@ jobs:
             ${{ runner.os }}-go-mod-
 
       - name: Install dependencies
-        run: go mod tidy
+        run: |
+          go mod tidy
+          go get ./...
 
       - name: Install GolangCI-Lint if not present
         run: |
