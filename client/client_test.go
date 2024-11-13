@@ -11,7 +11,7 @@ func NewTestConfig() signal.Config {
 		Port:     8080,
 		CertFile: "",
 		KeyFile:  "",
-		Debug:    false,
+		Debug:    true,
 	}
 }
 
@@ -22,9 +22,8 @@ func StartTestSignal() {
 
 func TestBroadcast(t *testing.T) {
 	go StartTestSignal()
-	client, err := New("ws://localhost:8080", "test", "test")
+	client, err := New("localhost:8080", "test", "test")
 	assert.NoError(t, err)
 	assert.NoError(t, client.Dial())
 	defer assert.NoError(t, client.Disconnect())
-
 }

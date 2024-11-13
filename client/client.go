@@ -38,9 +38,10 @@ func New(serverURL, userID, channelID string) (*Client, error) {
 }
 
 func (c *Client) Dial() error {
-	wsConn, _, err := websocket.DefaultDialer.Dial(c.serverURL, nil)
+	u := url.URL{Scheme: "ws", Host: c.serverURL, Path: "/ws"}
+	wsConn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		return fmt.Errorf("failed to Dial %w", err)
+		return fmt.Errorf("failed to Dial: %w", err)
 	}
 	c.conn = wsConn
 	return nil
