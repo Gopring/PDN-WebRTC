@@ -74,10 +74,12 @@ func (c *Channel) SetDownstream(conn *connection.Connection, id string) error {
 	return nil
 }
 
+// AddForwarder adds the specified user ID to the list of forwarders for the channel.
 func (c *Channel) AddForwarder(id string) {
 	c.forwarders = append(c.forwarders, id)
 }
 
+// GetForwarder retrieves the first forwarder ID from the list of forwarders.
 func (c *Channel) GetForwarder() string {
 	return c.forwarders[0]
 }

@@ -1,3 +1,4 @@
+// Package signaling contains logic for handling signaling processes between media and coordinator modules.
 package signaling
 
 import (
@@ -41,11 +42,11 @@ func (s *SignalHandler) Fetch(signal request.Signal) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if sdp, err := s.coordinator.RequestResponse(signal.ChannelID, forwarderID, "arrange"); err != nil {
+	sdp, err := s.coordinator.RequestResponse(signal.ChannelID, forwarderID, "arrange")
+	if err != nil {
 		return "", err
-	} else {
-		return sdp, nil
 	}
+	return sdp, nil
 }
 
 // Arrange arranges a signal.

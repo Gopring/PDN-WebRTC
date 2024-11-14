@@ -72,6 +72,7 @@ func (m *PdnMedia) AddReceiver(channelID string, userID string, sdp string) (str
 	return conn.ServerSDP(), nil
 }
 
+// AddForwarder creates a new downstream connection for forwarding media in the specified channel.
 func (m *PdnMedia) AddForwarder(channelID string, userID string, sdp string) (string, error) {
 	ch := m.channels[channelID]
 	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
@@ -92,6 +93,7 @@ func (m *PdnMedia) AddForwarder(channelID string, userID string, sdp string) (st
 	return conn.ServerSDP(), nil
 }
 
+// GetForwarder retrieves the forwarder ID for the specified channel.
 func (m *PdnMedia) GetForwarder(channelID string) (string, error) {
 	return m.channels[channelID].GetForwarder(), nil
 }
