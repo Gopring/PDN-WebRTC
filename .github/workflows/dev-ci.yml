@@ -1,0 +1,71 @@
+name: CI for Pull Requests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-lint:
+    name: Build and Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.0'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-mod-
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          go get ./...
+
+      - name: Install GolangCI-Lint if not present
+        run: |
+          if ! command -v golangci-lint &> /dev/null; then
+            echo "golangci-lint not found. Installing..."
+            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.62.0
+          else
+            echo "golangci-lint already installed."
+          fi
+
+      - name: Run Go Vet
+        run: go vet ./...
+
+      - name: Run GoFmt Check
+        run: |
+          diff=$(gofmt -l . | grep -v vendor | tee /dev/stderr | wc -l)
+          if [ "$diff" -ne 0 ]; then
+            echo "Code is not formatted. Run 'gofmt -w .' to fix formatting."
+            exit 1
+          fi
+
+      - name: Run Linters
+        run: golangci-lint run ./...
+
+      - name: Run Tests
+        run: go test -v ./...
+
+  merge-guard:
+    name: Ensure All Steps Pass Before Merge
+    runs-on: ubuntu-latest
+    needs: build-and-lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Final Check
+        run: echo "All checks passed. Ready to merge!"
