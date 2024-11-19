@@ -2,7 +2,10 @@
 package middleware
 
 import (
+	"bufio"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 )
 
@@ -13,6 +16,15 @@ type Logger struct {
 type logWriter struct {
 	http.ResponseWriter
 	statusCode int
+}
+
+// Hijack hijacks the connection. This is necessary for using websockets.
+func (l *logWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := l.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijack not supported")
+	}
+	return h.Hijack()
 }
 
 func (l *logWriter) WriteHeader(code int) {
