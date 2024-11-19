@@ -43,19 +43,19 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	sig := request.Signal{}
-	if err := s.Read(&sig); err != nil {
+	req := request.Activate{}
+	if err := s.Read(&req); err != nil {
 		log.Println(err)
 		return
 	}
 
-	if err := c.coordinator.AddUser(sig.ChannelID, sig.UserID, s); err != nil {
+	if err := c.coordinator.AddUser(req.ChannelID, req.UserID, s); err != nil {
 		log.Println(err)
 		return
 	}
 
 	defer func(sk *socket.WebSocket) {
-		if err := c.coordinator.Remove(sig.ChannelID, sig.UserID); err != nil {
+		if err := c.coordinator.Remove(req.ChannelID, req.UserID); err != nil {
 			log.Println(err)
 			return
 		}
@@ -66,6 +66,7 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}(s)
 
 	for {
+
 		sig := request.Signal{}
 		if err := s.Read(&sig); err != nil {
 			log.Println(err)
