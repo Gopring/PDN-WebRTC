@@ -8,6 +8,7 @@ import (
 	"testing"
 )
 
+// NewTestConfig creates a new signal.Config for testing.
 func NewTestConfig() signal.Config {
 	return signal.Config{
 		Port:     8080,
@@ -17,6 +18,7 @@ func NewTestConfig() signal.Config {
 	}
 }
 
+// StartTestSignal starts a signal server for testing.
 func StartTestSignal() {
 	s := signal.New(NewTestConfig())
 	_ = s.Start()
@@ -24,11 +26,10 @@ func StartTestSignal() {
 
 // TestBroadcast tests basic workflow of broadcast and view.
 func TestBroadcast(t *testing.T) {
-	t.Skipf("Skip this test because of server logic has error. make sure to fix it before run this test.")
+	//t.Skipf("Skip this test because of server logic has error. Make sure to fix it before run this test.")
 	go StartTestSignal()
 	broadcaster, err := New("localhost:8080", "test", "test")
 	assert.NoError(t, err)
-	defer assert.NoError(t, broadcaster.Disconnect())
 	track, err := webrtc.NewTrackLocalStaticRTP(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
 		"video", "test")
@@ -37,9 +38,8 @@ func TestBroadcast(t *testing.T) {
 
 	receiver, err := New("localhost:8080", "test", "test")
 	assert.NoError(t, err)
-	assert.NoError(t, receiver.Dial())
-	defer assert.NoError(t, receiver.Disconnect())
-	consumerTrack := func(remote *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+	assert.NoError(t, receiver.dial())
+	consumerTrack := func(remote *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		rtpBuf := make([]byte, 1400)
 		for {
 			i, _, readErr := remote.Read(rtpBuf)
