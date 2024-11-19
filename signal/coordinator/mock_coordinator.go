@@ -35,9 +35,9 @@ func (m *MockCoordinator) EXPECT() *MockCoordinatorMockRecorder {
 }
 
 // AddUser mocks base method.
-func (m *MockCoordinator) AddUser(arg0, arg1 string, arg2 socket.Socket) error {
+func (m *MockCoordinator) Activate(arg0, arg1 string, arg2 socket.Socket) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddUser", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Activate", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -45,7 +45,7 @@ func (m *MockCoordinator) AddUser(arg0, arg1 string, arg2 socket.Socket) error {
 // AddUser indicates an expected call of AddUser.
 func (mr *MockCoordinatorMockRecorder) AddUser(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUser", reflect.TypeOf((*MockCoordinator)(nil).AddUser), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Activate", reflect.TypeOf((*MockCoordinator)(nil).Activate), arg0, arg1, arg2)
 }
 
 // Remove mocks base method.

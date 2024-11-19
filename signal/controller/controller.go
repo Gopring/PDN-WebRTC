@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"pdn/signal/controller/socket"
 	"pdn/signal/coordinator"
-	"pdn/signal/signaling"
 	"pdn/types/api/request"
 )
 
@@ -23,14 +22,12 @@ const (
 // SocketController handles HTTP requests.
 type SocketController struct {
 	coordinator coordinator.Coordinator
-	signaler    signaling.Signal
 	debug       bool
 }
 
 // New creates a new instance of Handler.
-func New(s signaling.Signal, c *coordinator.MemoryCoordinator, isDebug bool) *SocketController {
+func New(c *coordinator.MemoryCoordinator, isDebug bool) *SocketController {
 	return &SocketController{
-		signaler:    s,
 		coordinator: c,
 		debug:       isDebug,
 	}
@@ -49,7 +46,7 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.coordinator.AddUser(req.ChannelID, req.UserID, s); err != nil {
+	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
 		log.Println(err)
 		return
 	}
@@ -65,14 +62,15 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}(s)
 
+	channelID := req.ChannelID
+	userID := req.UserID
 	for {
-
 		sig := request.Signal{}
 		if err := s.Read(&sig); err != nil {
 			log.Println(err)
 			return
 		}
-		res, err := c.route(sig)
+		res, err := c.route(sig, channelID, userID)
 		if err != nil {
 			log.Println(err)
 			return
@@ -85,20 +83,20 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // route routes a parsed request based on its type
-func (c *SocketController) route(signal request.Signal) (string, error) {
+func (c *SocketController) route(signal request.Signal, channelID, userID string) (string, error) {
 	switch signal.Type {
 	case send:
-		return c.signaler.Send(signal)
+		return c.coordinator.Send(channelID, userID, signal.SDP)
 	case receive:
-		return c.signaler.Receive(signal)
+		return c.coordinator.Receive(channelID, userID, signal.SDP)
 	case forward:
-		return c.signaler.Forward(signal)
+		return c.coordinator.Forward(channelID, userID, signal.SDP)
 	case fetch:
-		return c.signaler.Fetch(signal)
+		return c.coordinator.Fetch(channelID, userID, signal.SDP)
 	case arrange:
-		return c.signaler.Arrange(signal)
+		return c.coordinator.Arrange(channelID, userID, signal.SDP)
 	case reconnect:
-		return c.signaler.Reconnect(signal)
+		return c.coordinator.Reconnect(channelID, userID, signal.SDP)
 	default:
 		return "", fmt.Errorf("unknown request type: %s", signal.Type)
 	}
