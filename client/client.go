@@ -102,6 +102,9 @@ func (c *Client) Send(localTrack *webrtc.TrackLocalStaticRTP) error {
 
 	// 4. Add track to SEND
 	sender, err := conn.AddTrack(localTrack)
+	if err != nil {
+		return err
+	}
 	go func() {
 		rtcpBuf := make([]byte, 1500)
 		for {

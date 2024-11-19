@@ -104,34 +104,35 @@ func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
 	return user, nil
 }
 
+// Send process send signal
 func (c *MemoryCoordinator) Send(channelID, userID, sdp string) (string, error) {
 	return c.media.AddSender(channelID, userID, sdp)
 }
 
-// Receive receives a signal.
+// Receive process receive signal
 func (c *MemoryCoordinator) Receive(channelID, userID, sdp string) (string, error) {
 	return c.media.AddReceiver(channelID, userID, sdp)
 }
 
-// Forward forwards a signal.
+// Forward process signal
 func (c *MemoryCoordinator) Forward(channelID, userID, sdp string) (string, error) {
 	return c.media.AddForwarder(channelID, userID, sdp)
 }
 
-// Fetch fetches a signal.
-func (c *MemoryCoordinator) Fetch(channelID, userID, sdp string) (string, error) {
+// Fetch process a signal.
+func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, error) {
 	forwarderID, err := c.media.GetForwarder(channelID)
 	if err != nil {
 		return "", err
 	}
-	sdp, err = c.RequestResponse(channelID, forwarderID, "arrange")
+	forwarderSDP, err := c.RequestResponse(channelID, forwarderID, fetcherSDP)
 	if err != nil {
 		return "", err
 	}
-	return sdp, nil
+	return forwarderSDP, nil
 }
 
-// Arrange arranges a signal.
+// Arrange process arrange signal.
 func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, error) {
 	err := c.Response(channelID, userID, sdp)
 	if err != nil {
@@ -140,7 +141,7 @@ func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, erro
 	return "", nil
 }
 
-// Reconnect reconnects a signal.
+// Reconnect process reconnect signal.
 func (c *MemoryCoordinator) Reconnect(channelID, userID, sdp string) (string, error) {
 	return c.media.AddReceiver(channelID, userID, sdp)
 }
