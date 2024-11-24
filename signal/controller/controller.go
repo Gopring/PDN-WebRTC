@@ -9,6 +9,7 @@ import (
 	"pdn/types/api/request"
 )
 
+// Request types for signaling in the socket communication.
 const (
 	PUSH      = "PUSH"
 	PULL      = "PULL"
