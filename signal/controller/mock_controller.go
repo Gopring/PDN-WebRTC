@@ -35,13 +35,13 @@ func (m *MockController) EXPECT() *MockControllerMockRecorder {
 }
 
 // ServeHTTP mocks base method.
-func (m *MockController) ServeHTTP(arg0 http.ResponseWriter, arg1 *http.Request) {
+func (m *MockController) Process(arg0 http.ResponseWriter, arg1 *http.Request) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ServeHTTP", arg0, arg1)
+	m.ctrl.Call(m, "Process", arg0, arg1)
 }
 
 // ServeHTTP indicates an expected call of ServeHTTP.
 func (mr *MockControllerMockRecorder) ServeHTTP(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServeHTTP", reflect.TypeOf((*MockController)(nil).ServeHTTP), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Process", reflect.TypeOf((*MockController)(nil).Process), arg0, arg1)
 }

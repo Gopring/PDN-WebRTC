@@ -4,15 +4,14 @@ package controller
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"pdn/pkg/socket"
 	"pdn/signal/coordinator"
 	"pdn/types/api/request"
 )
 
 const (
-	send      = "send"
-	receive   = "receive"
+	push      = "push"
+	pull      = "pull"
 	forward   = "forward"
 	fetch     = "fetch"
 	arrange   = "arrange"
@@ -25,70 +24,64 @@ type SocketController struct {
 	debug       bool
 }
 
-// New creates a new instance of Handler.
-func New(c *coordinator.MemoryCoordinator, isDebug bool) *SocketController {
+// New creates a new instance of SocketController.
+func New(c coordinator.Coordinator, isDebug bool) *SocketController {
 	return &SocketController{
 		coordinator: c,
 		debug:       isDebug,
 	}
 }
 
-// ServeHTTP handles HTTP requests.
-func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s, err := socket.New(w, r)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	req := request.Activate{}
+// Process handles HTTP requests.
+func (c *SocketController) Process(s socket.Socket) error {
+	var req request.Activate
 	if err := s.Read(&req); err != nil {
-		log.Println(err)
-		return
+		log.Printf("Failed to read activation request: %v", err)
+		return err
 	}
+	log.Println("Activation request received:", req)
 
 	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
-		log.Println(err)
-		return
+		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
+		return err
 	}
-
-	defer func(sk *socket.WebSocket) {
+	defer func() {
 		if err := c.coordinator.Remove(req.ChannelID, req.UserID); err != nil {
-			log.Println(err)
-			return
+			log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
 		}
-		if err := sk.Close(); err != nil {
-			log.Println(err)
-			return
-		}
-	}(s)
+	}()
 
-	channelID := req.ChannelID
-	userID := req.UserID
+	log.Printf("Connection established (ChannelID: %s, UserID: %s)", req.ChannelID, req.UserID)
+	if err := c.handleConnection(s, req.ChannelID, req.UserID); err != nil {
+		return fmt.Errorf("connection handling error (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
+	}
+	return nil
+}
+
+// handleConnection processes incoming signals in a loop.
+func (c *SocketController) handleConnection(s socket.Socket, channelID, userID string) error {
 	for {
-		sig := request.Signal{}
+		var sig request.Signal
 		if err := s.Read(&sig); err != nil {
-			log.Println(err)
-			return
+			return fmt.Errorf("failed to read signal: %w", err)
 		}
 		res, err := c.route(sig, channelID, userID)
 		if err != nil {
-			log.Println(err)
-			return
+			return fmt.Errorf("failed to route signal: %w", err)
 		}
-		if err = s.Write(res); err != nil {
-			log.Println(err)
-			return
+		if err := s.Write(res); err != nil {
+			return fmt.Errorf("failed to write response: %w", err)
 		}
 	}
 }
 
-// route routes a parsed request based on its type
+// route directs a parsed request based on its type.
 func (c *SocketController) route(signal request.Signal, channelID, userID string) (string, error) {
 	switch signal.Type {
-	case send:
-		return c.coordinator.Send(channelID, userID, signal.SDP)
-	case receive:
-		return c.coordinator.Receive(channelID, userID, signal.SDP)
+	case push:
+		return c.coordinator.Push(channelID, userID, signal.SDP)
+	case pull:
+		return c.coordinator.Pull(channelID, userID, signal.SDP)
 	case forward:
 		return c.coordinator.Forward(channelID, userID, signal.SDP)
 	case fetch:

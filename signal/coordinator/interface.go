@@ -9,12 +9,10 @@ import (
 //
 //go:generate mockgen -destination=mock_coordinator.go -package=coordinator . Coordinator
 type Coordinator interface {
-	requestResponse(channelID string, userID string, data string) (string, error)
 	Activate(channelID string, userID string, s socket.Socket) error
-	response(channelID, userID string, data string) error
 	Remove(channelID, userID string) error
-	Send(channelID, userID, sdp string) (string, error)
-	Receive(channelID, userID, sdp string) (string, error)
+	Push(channelID, userID, sdp string) (string, error)
+	Pull(channelID, userID, sdp string) (string, error)
 	Forward(channelID, userID, sdp string) (string, error)
 	Fetch(channelID, userID, sdp string) (string, error)
 	Arrange(channelID, userID, sdp string) (string, error)
