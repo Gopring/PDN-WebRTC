@@ -59,13 +59,13 @@ func (c *MemoryCoordinator) Remove(channelID, userID string) error {
 	return nil
 }
 
-// Send process send signal
-func (c *MemoryCoordinator) Send(channelID, userID, sdp string) (string, error) {
+// Push process send signal
+func (c *MemoryCoordinator) Push(channelID, userID, sdp string) (string, error) {
 	return c.media.AddSender(channelID, userID, sdp)
 }
 
-// Receive process receive signal
-func (c *MemoryCoordinator) Receive(channelID, userID, sdp string) (string, error) {
+// Pull process receive signal
+func (c *MemoryCoordinator) Pull(channelID, userID, sdp string) (string, error) {
 	return c.media.AddReceiver(channelID, userID, sdp)
 }
 

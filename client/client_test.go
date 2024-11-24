@@ -4,6 +4,7 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/assert"
+	"log"
 	"pdn/signal"
 	"testing"
 )
@@ -26,7 +27,6 @@ func StartTestSignal() {
 
 // TestBroadcast tests basic workflow of broadcast and view.
 func TestBroadcast(t *testing.T) {
-	t.Skipf("Skip this test because of server logic has error. Make sure to fix it before run this test.")
 	go StartTestSignal()
 	broadcaster, err := New("localhost:8080", "test", "test")
 	assert.NoError(t, err)
@@ -34,7 +34,8 @@ func TestBroadcast(t *testing.T) {
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
 		"video", "test")
 	assert.NoError(t, err)
-	assert.NoError(t, broadcaster.Send(track))
+	log.Println("broadcasting")
+	assert.NoError(t, broadcaster.Push(track))
 
 	receiver, err := New("localhost:8080", "test", "test")
 	assert.NoError(t, err)
@@ -55,7 +56,8 @@ func TestBroadcast(t *testing.T) {
 			assert.Equal(t, []byte{0x00, 0x02}, packet.Payload)
 		}
 	}
-	assert.NoError(t, receiver.Receive(consumerTrack))
+	log.Println("receiving")
+	assert.NoError(t, receiver.Pull(consumerTrack))
 	assert.NoError(t, track.WriteRTP(&rtp.Packet{
 		Header: rtp.Header{
 			Version:        2,

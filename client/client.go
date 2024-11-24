@@ -13,8 +13,8 @@ import (
 
 // message type
 const (
-	RECEIVE = "RECEIVE"
-	SEND    = "SEND"
+	PULL    = "PULL"
+	PUSH    = "PUSH"
 	FORWARD = "FORWARD"
 	ARRANGE = "ARRANGE"
 	FETCH   = "FETCH"
@@ -48,11 +48,11 @@ func (c *Client) dial() error {
 	return nil
 }
 
-// send sends a signal to the WebSocket server and receives a response.
-func (c *Client) send(data any) (string, error) {
-	// Send the data as JSON to the WebSocket server
+// push sends a signal to the WebSocket server and receives a response.
+func (c *Client) push(data any) (string, error) {
+	// Push the data as JSON to the WebSocket server
 	if err := c.socket.WriteJSON(data); err != nil {
-		return "", fmt.Errorf("failed to SEND data: %w", err)
+		return "", fmt.Errorf("failed to PUSH data: %w", err)
 	}
 
 	// Read the response
@@ -66,7 +66,7 @@ func (c *Client) send(data any) (string, error) {
 
 // activate activates the client on the server.
 func (c *Client) activate() error {
-	_, err := c.send(request.Activate{
+	_, err := c.push(request.Activate{
 		ChannelID: c.channelID,
 		UserID:    c.userID,
 	})
@@ -76,8 +76,8 @@ func (c *Client) activate() error {
 	return nil
 }
 
-// Send sends a local track to the server.
-func (c *Client) Send(localTrack *webrtc.TrackLocalStaticRTP) error {
+// Push sends a local track to the server.
+func (c *Client) Push(localTrack *webrtc.TrackLocalStaticRTP) error {
 	// 0. Dial the WebSocket server
 	if err := c.dial(); err != nil {
 		return err
@@ -100,7 +100,7 @@ func (c *Client) Send(localTrack *webrtc.TrackLocalStaticRTP) error {
 		return err
 	}
 
-	// 4. Add track to SEND
+	// 4. Add track to PUSH
 	sender, err := conn.AddTrack(localTrack)
 	if err != nil {
 		return err
@@ -114,10 +114,10 @@ func (c *Client) Send(localTrack *webrtc.TrackLocalStaticRTP) error {
 		}
 	}()
 
-	// 5. Send the offer (SDP) to the server to initiate broadcasting
-	//    and RECEIVE the server's SDP answer.
-	remoteSDP, err := c.send(request.Signal{
-		Type: SEND,
+	// 5. Push the offer (SDP) to the server to initiate broadcasting
+	//    and PULL the server's SDP answer.
+	remoteSDP, err := c.push(request.Signal{
+		Type: PUSH,
 		SDP:  offer.SDP,
 	})
 	if err != nil {
@@ -133,8 +133,8 @@ func (c *Client) Send(localTrack *webrtc.TrackLocalStaticRTP) error {
 	return nil
 }
 
-// Receive receives a remote track from the server.
-func (c *Client) Receive(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) error {
+// Pull receives a remote track from the server.
+func (c *Client) Pull(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) error {
 	// 1. Create a new peer connection
 	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
@@ -148,13 +148,13 @@ func (c *Client) Receive(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver))
 	// 3. Add track to receive
 	conn.OnTrack(consume)
 
-	// 4. Send the offer (SDP) to the server to initiate broadcasting
-	//    and RECEIVE the server's SDP answer.
+	// 4. Push the offer (SDP) to the server to initiate broadcasting
+	//    and PULL the server's SDP answer.
 	signal := request.Signal{
-		Type: RECEIVE,
+		Type: PULL,
 		SDP:  offer.SDP,
 	}
-	remoteSDP, err := c.send(signal)
+	remoteSDP, err := c.push(signal)
 	if err != nil {
 		return err
 	}
@@ -168,8 +168,8 @@ func (c *Client) Receive(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver))
 
 // Fetch fetches a remote track from the forwarder.
 func (c *Client) Fetch(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) error {
-	//NOTE(window9u): FETCH logic is same as RECEIVE. For clients, it is same
-	// that SEND their SDP and get SDP from server. But now, we detach for test and
+	//NOTE(window9u): FETCH logic is same as PULL. For clients, it is same
+	// that PUSH their SDP and get SDP from server. But now, we detach for test and
 	// make it more explicit.
 
 	// 1. Create a new peer connection
@@ -182,16 +182,16 @@ func (c *Client) Fetch(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) e
 	if err != nil {
 		return err
 	}
-	// 3. Add track to SEND
+	// 3. Add track to PUSH
 	conn.OnTrack(consume)
 
-	// 4. Send the offer (SDP) to the server to initiate broadcasting
-	//    and RECEIVE the server's SDP answer.
+	// 4. Push the offer (SDP) to the server to initiate broadcasting
+	//    and PULL the server's SDP answer.
 	signal := request.Signal{
 		Type: FETCH,
 		SDP:  offer.SDP,
 	}
-	remoteSDP, err := c.send(signal)
+	remoteSDP, err := c.push(signal)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (c *Client) Fetch(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) e
 }
 
 // Forward forwards a remote track to the server. Forwarding logic is same as
-// RECEIVE. But it makes notice to server and also, it is more explicit for test.
+// PULL. But it makes notice to server and also, it is more explicit for test.
 func (c *Client) Forward() error {
 	// 1. Create a new peer connection
 	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{})
@@ -216,7 +216,7 @@ func (c *Client) Forward() error {
 	if err != nil {
 		return err
 	}
-	// 3. Add track to SEND
+	// 3. Add track to PUSH
 	conn.OnTrack(func(remoteTrack *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		var newTrackErr error
 		c.localTrack, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", c.userID)
@@ -236,13 +236,13 @@ func (c *Client) Forward() error {
 		}
 	})
 
-	// 4. Send the offer (SDP) to the server to initiate broadcasting
-	//    and RECEIVE the server's SDP answer.
+	// 4. Push the offer (SDP) to the server to initiate broadcasting
+	//    and PULL the server's SDP answer.
 	signal := request.Signal{
 		Type: FORWARD,
 		SDP:  offer.SDP,
 	}
-	remoteSDP, err := c.send(signal)
+	remoteSDP, err := c.push(signal)
 	if err != nil {
 		return err
 	}
@@ -256,8 +256,8 @@ func (c *Client) Forward() error {
 
 // Arrange arranges a remote track to the server.
 func (c *Client) Arrange(offer string) error {
-	// server send ARRANGE to FORWARD to fetcher. client ARRANGE
-	// their SDP and SEND it to server. and server toss it to fetcher.
+	// server push ARRANGE to FORWARD to fetcher. client ARRANGE
+	// their SDP and PUSH it to server. and server toss it to fetcher.
 	// so it makes connections with fetcher and forwarder.
 
 	// 1. Create a new peer connection
@@ -275,7 +275,7 @@ func (c *Client) Arrange(offer string) error {
 	if err != nil {
 		return err
 	}
-	// 3. Add track to SEND
+	// 3. Add track to PUSH
 	sender, err := conn.AddTrack(c.localTrack)
 	if err != nil {
 		return err
@@ -296,7 +296,7 @@ func (c *Client) Arrange(offer string) error {
 	}
 
 	// 6. Set sdp answer to the server for broadcasting
-	if _, err := c.send(sig); err != nil {
+	if _, err := c.push(sig); err != nil {
 		return err
 	}
 	return nil
