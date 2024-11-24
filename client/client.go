@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
 	"io"
+	"log"
 	"net/url"
 	"pdn/types/api/request"
 )
@@ -87,18 +88,31 @@ func (c *Client) Push(localTrack *webrtc.TrackLocalStaticRTP) error {
 	if err := c.activate(); err != nil {
 		return err
 	}
+	log.Println("Client activated")
 
 	// 2. Create a new peer connection
-	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	conn, err := webrtc.NewPeerConnection(webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{
+				URLs: []string{"stun:stun.l.google.com:19302"},
+			},
+		},
+	})
 	if err != nil {
 		return err
 	}
+	conn.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate != nil {
+			fmt.Println("ICE Candidate:", candidate.ToJSON())
+		}
+	})
 
 	// 3. Create an SDP offer to start broadcasting
 	offer, err := conn.CreateOffer(&webrtc.OfferOptions{})
 	if err != nil {
 		return err
 	}
+	log.Println("Generated Offer SDP:", offer.SDP)
 
 	// 4. Add track to PUSH
 	sender, err := conn.AddTrack(localTrack)
@@ -113,6 +127,11 @@ func (c *Client) Push(localTrack *webrtc.TrackLocalStaticRTP) error {
 			}
 		}
 	}()
+
+	if err := conn.SetLocalDescription(offer); err != nil {
+		return err
+	}
+	log.Println("Local Description Set:", conn.LocalDescription().SDP)
 
 	// 5. Push the offer (SDP) to the server to initiate broadcasting
 	//    and PULL the server's SDP answer.

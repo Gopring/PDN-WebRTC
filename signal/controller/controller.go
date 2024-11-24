@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	push      = "push"
-	pull      = "pull"
-	forward   = "forward"
-	fetch     = "fetch"
-	arrange   = "arrange"
-	reconnect = "reconnect"
+	PUSH      = "PUSH"
+	PULL      = "PULL"
+	FORWARD   = "FORWARD"
+	FETCH     = "FETCH"
+	ARRANGE   = "ARRANGE"
+	RECONNECT = "RECONNECT"
 )
 
 // SocketController handles HTTP requests.
@@ -39,12 +39,16 @@ func (c *SocketController) Process(s socket.Socket) error {
 		log.Printf("Failed to read activation request: %v", err)
 		return err
 	}
-	log.Println("Activation request received:", req)
 
 	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
 		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
 		return err
 	}
+	if err := s.Write("Activated"); err != nil {
+		log.Printf("Failed to write response: %v", err)
+		return err
+	}
+
 	defer func() {
 		if err := c.coordinator.Remove(req.ChannelID, req.UserID); err != nil {
 			log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
@@ -77,18 +81,19 @@ func (c *SocketController) handleConnection(s socket.Socket, channelID, userID s
 
 // route directs a parsed request based on its type.
 func (c *SocketController) route(signal request.Signal, channelID, userID string) (string, error) {
+	log.Println("Signal received:", signal.Type)
 	switch signal.Type {
-	case push:
+	case PUSH:
 		return c.coordinator.Push(channelID, userID, signal.SDP)
-	case pull:
+	case PULL:
 		return c.coordinator.Pull(channelID, userID, signal.SDP)
-	case forward:
+	case FORWARD:
 		return c.coordinator.Forward(channelID, userID, signal.SDP)
-	case fetch:
+	case FETCH:
 		return c.coordinator.Fetch(channelID, userID, signal.SDP)
-	case arrange:
+	case ARRANGE:
 		return c.coordinator.Arrange(channelID, userID, signal.SDP)
-	case reconnect:
+	case RECONNECT:
 		return c.coordinator.Reconnect(channelID, userID, signal.SDP)
 	default:
 		return "", fmt.Errorf("unknown request type: %s", signal.Type)
