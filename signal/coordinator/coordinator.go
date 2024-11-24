@@ -3,6 +3,7 @@ package coordinator
 
 import (
 	"fmt"
+	"pdn/media"
 	"pdn/signal/controller/socket"
 	"time"
 )
@@ -18,12 +19,14 @@ type MemoryCoordinator struct {
 	// for key). But future, there is case of broadcast to all user of channel.
 	// This is why managing users in channel
 	channels map[string]*Channel
+	media    media.Media
 }
 
 // New creates a new instance of MemoryCoordinator.
-func New() *MemoryCoordinator {
+func New(med media.Media) *MemoryCoordinator {
 	return &MemoryCoordinator{
 		channels: map[string]*Channel{},
+		media:    med,
 	}
 }
 
@@ -46,8 +49,8 @@ func (c *MemoryCoordinator) RequestResponse(channelID string, userID string, dat
 	return sdp, nil
 }
 
-// AddUser adds user to channel
-func (c *MemoryCoordinator) AddUser(channelID string, userID string, s socket.Socket) error {
+// Activate register and activate user
+func (c *MemoryCoordinator) Activate(channelID string, userID string, s socket.Socket) error {
 	_, exists := c.channels[channelID]
 	if !exists {
 		c.channels[channelID] = &Channel{
@@ -99,4 +102,46 @@ func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
 		return nil, fmt.Errorf("user %s doesn't exists", userID)
 	}
 	return user, nil
+}
+
+// Send process send signal
+func (c *MemoryCoordinator) Send(channelID, userID, sdp string) (string, error) {
+	return c.media.AddSender(channelID, userID, sdp)
+}
+
+// Receive process receive signal
+func (c *MemoryCoordinator) Receive(channelID, userID, sdp string) (string, error) {
+	return c.media.AddReceiver(channelID, userID, sdp)
+}
+
+// Forward process signal
+func (c *MemoryCoordinator) Forward(channelID, userID, sdp string) (string, error) {
+	return c.media.AddForwarder(channelID, userID, sdp)
+}
+
+// Fetch process a signal.
+func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, error) {
+	forwarderID, err := c.media.GetForwarder(channelID)
+	if err != nil {
+		return "", err
+	}
+	forwarderSDP, err := c.RequestResponse(channelID, forwarderID, fetcherSDP)
+	if err != nil {
+		return "", err
+	}
+	return forwarderSDP, nil
+}
+
+// Arrange process arrange signal.
+func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, error) {
+	err := c.Response(channelID, userID, sdp)
+	if err != nil {
+		return "", err
+	}
+	return "", nil
+}
+
+// Reconnect process reconnect signal.
+func (c *MemoryCoordinator) Reconnect(channelID, userID, sdp string) (string, error) {
+	return c.media.AddReceiver(channelID, userID, sdp)
 }

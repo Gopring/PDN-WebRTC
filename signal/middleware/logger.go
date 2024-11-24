@@ -2,12 +2,16 @@
 package middleware
 
 import (
+	"bufio"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 )
 
 // Logger logs requests and responses.
 type Logger struct {
+	http.ResponseWriter
 }
 
 type logWriter struct {
@@ -15,18 +19,36 @@ type logWriter struct {
 	statusCode int
 }
 
-func (l *logWriter) WriteHeader(code int) {
-	l.statusCode = code
-	l.ResponseWriter.WriteHeader(code)
-}
-
 // NewLogger creates a new Logger middleware.
 func NewLogger() *Logger {
 	return &Logger{}
 }
 
+// Hijack hijacks the connection. This is necessary for using websockets.
+func (l *Logger) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := l.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijack not supported")
+	}
+	return h.Hijack()
+}
+
+// Hijack hijacks the connection. This is necessary for using websockets.
+func (l *logWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := l.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijack not supported")
+	}
+	return h.Hijack()
+}
+
+func (l *logWriter) WriteHeader(code int) {
+	l.statusCode = code
+	l.ResponseWriter.WriteHeader(code)
+}
+
 // Intercept logs the request and response.
-func (l Logger) Intercept(next http.Handler) http.Handler {
+func (l *Logger) Intercept(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//TODO(window9u): we could export metrics here status code, response time, etc..
 		// start timestamp here

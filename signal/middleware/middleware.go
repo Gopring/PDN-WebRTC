@@ -1,11 +1,17 @@
 // Package middleware contains common middleware functions for HTTP handlers.
 package middleware
 
-import "net/http"
+import (
+	"bufio"
+	"net"
+	"net/http"
+)
 
 // Interceptor is a middleware interface.
 type Interceptor interface {
 	Intercept(handlerFunc http.Handler) http.Handler
+	// NOTE: Hijack hijacks the connection. This is necessary for using websockets.
+	Hijack() (net.Conn, *bufio.ReadWriter, error)
 }
 
 // Set applies multiple middleware to a handler. The middleware are applied in

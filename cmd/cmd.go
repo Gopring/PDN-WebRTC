@@ -12,7 +12,7 @@ import (
 
 // Run starts the application.
 func Run() {
-	config, err := SetupConfig()
+	config, err := SetupConfig(os.Stdout, os.Args[1:])
 	if err != nil {
 		os.Exit(1)
 	}
@@ -24,8 +24,8 @@ func Run() {
 }
 
 // SetupConfig sets up and returns the configuration.
-func SetupConfig() (signal.Config, error) {
-	config, err := ParseArgs(os.Stdout, os.Args[1:])
+func SetupConfig(w io.Writer, args []string) (signal.Config, error) {
+	config, err := Parse(w, args)
 	if err != nil {
 		return config, err
 	}
@@ -35,8 +35,8 @@ func SetupConfig() (signal.Config, error) {
 	return config, nil
 }
 
-// ParseArgs parses the command line arguments.
-func ParseArgs(w io.Writer, args []string) (signal.Config, error) {
+// Parse parses the command line arguments.
+func Parse(w io.Writer, args []string) (signal.Config, error) {
 	con := signal.Config{}
 
 	fs := flag.NewFlagSet("pdn", flag.ContinueOnError)
