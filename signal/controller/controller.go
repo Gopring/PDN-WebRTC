@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"pdn/signal/controller/socket"
+	"pdn/pkg/socket"
 	"pdn/signal/coordinator"
 	"pdn/types/api/request"
 )

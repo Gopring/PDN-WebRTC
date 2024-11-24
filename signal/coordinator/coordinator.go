@@ -4,7 +4,7 @@ package coordinator
 import (
 	"fmt"
 	"pdn/media"
-	"pdn/signal/controller/socket"
+	"pdn/pkg/socket"
 	"time"
 )
 
@@ -30,25 +30,6 @@ func New(med media.Media) *MemoryCoordinator {
 	}
 }
 
-// RequestResponse send data to user and wait for response
-func (c *MemoryCoordinator) RequestResponse(channelID string, userID string, data string) (string, error) {
-	user, err := c.getUser(channelID, userID)
-	if err != nil {
-		return "", err
-	}
-
-	if err := user.Request(data); err != nil {
-		return "", fmt.Errorf("failed to send user")
-	}
-
-	sdp, err := user.WaitForResponse(waitResponse)
-	if err != nil {
-		return "", err
-	}
-
-	return sdp, nil
-}
-
 // Activate register and activate user
 func (c *MemoryCoordinator) Activate(channelID string, userID string, s socket.Socket) error {
 	_, exists := c.channels[channelID]
@@ -65,18 +46,6 @@ func (c *MemoryCoordinator) Activate(channelID string, userID string, s socket.S
 	return nil
 }
 
-// Response send data to user
-func (c *MemoryCoordinator) Response(channelID, userID string, data string) error {
-	user, err := c.getUser(channelID, userID)
-	if err != nil {
-		return err
-	}
-	if err := user.Response(data, waitReceive); err != nil {
-		return fmt.Errorf("failed to answer %s", userID)
-	}
-	return nil
-}
-
 // Remove removes user from channel
 func (c *MemoryCoordinator) Remove(channelID, userID string) error {
 	channel, exists := c.channels[channelID]
@@ -88,20 +57,6 @@ func (c *MemoryCoordinator) Remove(channelID, userID string) error {
 		delete(c.channels, channelID)
 	}
 	return nil
-}
-
-// getUser returns user from channel
-func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
-	channel, exists := c.channels[channelID]
-	if !exists {
-		return nil, fmt.Errorf("channel %s doesn't exists", channelID)
-	}
-
-	user, exists := channel.users[userID]
-	if !exists {
-		return nil, fmt.Errorf("user %s doesn't exists", userID)
-	}
-	return user, nil
 }
 
 // Send process send signal
@@ -125,7 +80,7 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	forwarderSDP, err := c.RequestResponse(channelID, forwarderID, fetcherSDP)
+	forwarderSDP, err := c.requestResponse(channelID, forwarderID, fetcherSDP)
 	if err != nil {
 		return "", err
 	}
@@ -134,7 +89,7 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 
 // Arrange process arrange signal.
 func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, error) {
-	err := c.Response(channelID, userID, sdp)
+	err := c.response(channelID, userID, sdp)
 	if err != nil {
 		return "", err
 	}
@@ -144,4 +99,49 @@ func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, erro
 // Reconnect process reconnect signal.
 func (c *MemoryCoordinator) Reconnect(channelID, userID, sdp string) (string, error) {
 	return c.media.AddReceiver(channelID, userID, sdp)
+}
+
+// RequestResponse send data to user and wait for response
+func (c *MemoryCoordinator) requestResponse(channelID string, userID string, data string) (string, error) {
+	user, err := c.getUser(channelID, userID)
+	if err != nil {
+		return "", err
+	}
+
+	if err := user.Request(data); err != nil {
+		return "", fmt.Errorf("failed to send user")
+	}
+
+	sdp, err := user.WaitForResponse(waitResponse)
+	if err != nil {
+		return "", err
+	}
+
+	return sdp, nil
+}
+
+// Response send data to user
+func (c *MemoryCoordinator) response(channelID, userID string, data string) error {
+	user, err := c.getUser(channelID, userID)
+	if err != nil {
+		return err
+	}
+	if err := user.Response(data, waitReceive); err != nil {
+		return fmt.Errorf("failed to answer %s", userID)
+	}
+	return nil
+}
+
+// getUser returns user from channel
+func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
+	channel, exists := c.channels[channelID]
+	if !exists {
+		return nil, fmt.Errorf("channel %s doesn't exists", channelID)
+	}
+
+	user, exists := channel.users[userID]
+	if !exists {
+		return nil, fmt.Errorf("user %s doesn't exists", userID)
+	}
+	return user, nil
 }

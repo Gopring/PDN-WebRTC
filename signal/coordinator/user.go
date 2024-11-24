@@ -3,7 +3,7 @@ package coordinator
 
 import (
 	"fmt"
-	"pdn/signal/controller/socket"
+	"pdn/pkg/socket"
 	"time"
 )
 

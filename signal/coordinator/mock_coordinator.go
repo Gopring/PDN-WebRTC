@@ -5,7 +5,7 @@
 package coordinator
 
 import (
-	socket "pdn/signal/controller/socket"
+	"pdn/pkg/socket"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -65,7 +65,7 @@ func (mr *MockCoordinatorMockRecorder) Remove(arg0, arg1 interface{}) *gomock.Ca
 // RequestResponse mocks base method.
 func (m *MockCoordinator) RequestResponse(arg0, arg1, arg2 string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RequestResponse", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "requestResponse", arg0, arg1, arg2)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -74,13 +74,13 @@ func (m *MockCoordinator) RequestResponse(arg0, arg1, arg2 string) (string, erro
 // RequestResponse indicates an expected call of RequestResponse.
 func (mr *MockCoordinatorMockRecorder) RequestResponse(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestResponse", reflect.TypeOf((*MockCoordinator)(nil).RequestResponse), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "requestResponse", reflect.TypeOf((*MockCoordinator)(nil).RequestResponse), arg0, arg1, arg2)
 }
 
 // Response mocks base method.
 func (m *MockCoordinator) Response(arg0, arg1, arg2 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Response", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "response", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -88,5 +88,5 @@ func (m *MockCoordinator) Response(arg0, arg1, arg2 string) error {
 // Response indicates an expected call of Response.
 func (mr *MockCoordinatorMockRecorder) Response(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Response", reflect.TypeOf((*MockCoordinator)(nil).Response), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "response", reflect.TypeOf((*MockCoordinator)(nil).Response), arg0, arg1, arg2)
 }
