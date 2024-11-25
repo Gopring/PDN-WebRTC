@@ -3,6 +3,7 @@ package coordinator
 
 import (
 	"fmt"
+	"log"
 	"pdn/media"
 	"pdn/pkg/socket"
 	"pdn/types/api/response"
@@ -81,11 +82,13 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 	if err != nil {
 		return "", err
 	}
+	log.Println("send forwarder to arrange (forwarderID):", forwarderID)
 	forwarderSDP, err := c.requestResponse(channelID, forwarderID, response.Arrange{
 		Type:       "ARRANGE",
 		StatusCode: 200,
 		SDP:        fetcherSDP,
 	})
+	log.Println("send forwarderSDP to fetcher")
 	if err != nil {
 		return "", err
 	}
@@ -94,11 +97,12 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 
 // Arrange process arrange signal.
 func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, error) {
+	log.Println("get Arrange request channelID:", channelID, "userID:", userID)
 	err := c.response(channelID, userID, sdp)
 	if err != nil {
 		return "", err
 	}
-	return "", nil
+	return "send your sdp to fetcher", nil
 }
 
 // Reconnect process reconnect signal.
