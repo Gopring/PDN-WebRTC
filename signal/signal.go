@@ -26,7 +26,6 @@ func New(config Config) *Signal {
 	con := controller.New(cod, config.Debug)
 	mds := []middleware.Interceptor{
 		middleware.NewAuth(),
-		middleware.NewCORS(),
 		middleware.NewLogger(),
 		middleware.NewSocket(con),
 	}

@@ -13,7 +13,12 @@ type WebSocket struct {
 
 // New creates a new WebSocket connection by upgrading the HTTP request.
 func New(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
-	ug := websocket.Upgrader{}
+	ug := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+
 	conn, err := ug.Upgrade(w, r, nil)
 	if err != nil {
 		return nil, err
