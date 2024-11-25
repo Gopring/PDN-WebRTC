@@ -1,5 +1,6 @@
 package response
 
+// Activate is data type for activating user
 type Activate struct {
 	RequestID  int    `json:"request_id"`
 	StatusCode int    `json:"status_code"`
