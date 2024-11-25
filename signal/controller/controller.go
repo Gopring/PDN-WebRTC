@@ -7,6 +7,7 @@ import (
 	"pdn/pkg/socket"
 	"pdn/signal/coordinator"
 	"pdn/types/api/request"
+	"pdn/types/api/response"
 )
 
 // Request types for signaling in the socket communication.
@@ -35,32 +36,54 @@ func New(c coordinator.Coordinator, isDebug bool) *SocketController {
 
 // Process handles HTTP requests.
 func (c *SocketController) Process(s socket.Socket) error {
+	channelID, userID, err := c.activate(s)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Connection established (ChannelID: %s, UserID: %s)", channelID, userID)
+	if err := c.handleConnection(s, channelID, userID); err != nil {
+		return fmt.Errorf("connection handling error (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	}
+
+	if err := c.coordinator.Remove(channelID, userID); err != nil {
+		log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	}
+
+	return nil
+}
+
+func (c *SocketController) activate(s socket.Socket) (string, string, error) {
 	var req request.Activate
+
 	if err := s.Read(&req); err != nil {
 		log.Printf("Failed to read activation request: %v", err)
-		return err
+		return "", "", err
 	}
 
 	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
-		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
-		return err
-	}
-	if err := s.Write("Activated"); err != nil {
-		log.Printf("Failed to write response: %v", err)
-		return err
-	}
-
-	defer func() {
-		if err := c.coordinator.Remove(req.ChannelID, req.UserID); err != nil {
-			log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
+		if err = s.WriteJson(response.Activate{
+			RequestID:  req.RequestID,
+			StatusCode: 400,
+			Message:    err.Error(),
+		}); err != nil {
+			log.Printf("Failed to write response: %v", err)
+			return "", "", err
 		}
-	}()
-
-	log.Printf("Connection established (ChannelID: %s, UserID: %s)", req.ChannelID, req.UserID)
-	if err := c.handleConnection(s, req.ChannelID, req.UserID); err != nil {
-		return fmt.Errorf("connection handling error (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
+		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
+		return "", "", err
 	}
-	return nil
+
+	if err := s.WriteJson(response.Activate{
+		RequestID:  req.RequestID,
+		StatusCode: 200,
+		Message:    "Connection established",
+	}); err != nil {
+		log.Printf("Failed to write response: %v", err)
+		return "", "", err
+	}
+
+	return req.ChannelID, req.UserID, nil
 }
 
 // handleConnection processes incoming signals in a loop.
