@@ -97,29 +97,42 @@ func (c *SocketController) handleConnection(s socket.Socket, channelID, userID s
 		if err != nil {
 			return fmt.Errorf("failed to route signal: %w", err)
 		}
-		if err := s.Write(res); err != nil {
+		if err := s.WriteJson(res); err != nil {
 			return fmt.Errorf("failed to write response: %w", err)
 		}
 	}
 }
 
 // route directs a parsed request based on its type.
-func (c *SocketController) route(signal request.Signal, channelID, userID string) (string, error) {
+func (c *SocketController) route(signal request.Signal, channelID, userID string) (response.Signal, error) {
 	log.Println("Signal received:", signal.Type)
+	res := response.Signal{
+		RequestID: signal.RequestID,
+	}
+	var sdp string
+	var err error
 	switch signal.Type {
 	case PUSH:
-		return c.coordinator.Push(channelID, userID, signal.SDP)
+		sdp, err = c.coordinator.Push(channelID, userID, signal.SDP)
 	case PULL:
-		return c.coordinator.Pull(channelID, userID, signal.SDP)
+		sdp, err = c.coordinator.Pull(channelID, userID, signal.SDP)
 	case FORWARD:
-		return c.coordinator.Forward(channelID, userID, signal.SDP)
+		sdp, err = c.coordinator.Forward(channelID, userID, signal.SDP)
 	case FETCH:
-		return c.coordinator.Fetch(channelID, userID, signal.SDP)
+		sdp, err = c.coordinator.Fetch(channelID, userID, signal.SDP)
 	case ARRANGE:
-		return c.coordinator.Arrange(channelID, userID, signal.SDP)
+		sdp, err = c.coordinator.Arrange(channelID, userID, signal.SDP)
 	case RECONNECT:
-		return c.coordinator.Reconnect(channelID, userID, signal.SDP)
+		sdp, err = c.coordinator.Reconnect(channelID, userID, signal.SDP)
 	default:
-		return "", fmt.Errorf("unknown request type: %s", signal.Type)
+		sdp, err = "", fmt.Errorf("unknown request type: %s", signal.Type)
 	}
+	if err != nil {
+		res.StatusCode = 400
+		res.SDP = err.Error()
+		return res, err
+	}
+	res.StatusCode = 200
+	res.SDP = sdp
+	return res, err
 }

@@ -8,7 +8,7 @@ type Activate struct {
 
 // Signal is data type for signaling
 type Signal struct {
-	RequestID int    `json:"request_id"`
-	Type      string `json:"type"`
-	SDP       string `json:"sdp"`
+	RequestID  int    `json:"request_id"`
+	StatusCode int    `json:"status_code"`
+	SDP        string `json:"sdp"`
 }
