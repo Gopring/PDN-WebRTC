@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"pdn/media"
 	"pdn/pkg/socket"
+	"pdn/types/api/response"
 	"time"
 )
 
@@ -80,7 +81,11 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	forwarderSDP, err := c.requestResponse(channelID, forwarderID, fetcherSDP)
+	forwarderSDP, err := c.requestResponse(channelID, forwarderID, response.Arrange{
+		Type:       "ARRANGE",
+		StatusCode: 200,
+		SDP:        fetcherSDP,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -102,13 +107,13 @@ func (c *MemoryCoordinator) Reconnect(channelID, userID, sdp string) (string, er
 }
 
 // RequestResponse send data to user and wait for response
-func (c *MemoryCoordinator) requestResponse(channelID string, userID string, data string) (string, error) {
+func (c *MemoryCoordinator) requestResponse(channelID string, userID string, req any) (string, error) {
 	user, err := c.getUser(channelID, userID)
 	if err != nil {
 		return "", err
 	}
 
-	if err := user.Request(data); err != nil {
+	if err := user.Request(req); err != nil {
 		return "", fmt.Errorf("failed to send user")
 	}
 

@@ -13,3 +13,9 @@ type Signal struct {
 	StatusCode int    `json:"status_code"`
 	SDP        string `json:"sdp"`
 }
+
+type Arrange struct {
+	Type       string `json:"type"`
+	StatusCode int    `json:"status_code"`
+	SDP        string `json:"sdp"`
+}
