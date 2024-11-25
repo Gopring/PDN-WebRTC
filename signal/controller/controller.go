@@ -24,6 +24,7 @@ const (
 type SocketController struct {
 	coordinator coordinator.Coordinator
 	debug       bool
+	handlers    map[string]func(string, string, string) (string, error)
 }
 
 // New creates a new instance of SocketController.
@@ -31,6 +32,14 @@ func New(c coordinator.Coordinator, isDebug bool) *SocketController {
 	return &SocketController{
 		coordinator: c,
 		debug:       isDebug,
+		handlers: map[string]func(string, string, string) (string, error){
+			PUSH:      c.Push,
+			PULL:      c.Pull,
+			FORWARD:   c.Forward,
+			FETCH:     c.Fetch,
+			ARRANGE:   c.Arrange,
+			RECONNECT: c.Reconnect,
+		},
 	}
 }
 
@@ -62,13 +71,14 @@ func (c *SocketController) activate(s socket.Socket) (string, string, error) {
 	}
 
 	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
-		if err = s.WriteJson(response.Activate{
+		res := response.Activate{
 			RequestID:  req.RequestID,
 			StatusCode: 400,
 			Message:    err.Error(),
-		}); err != nil {
-			log.Printf("Failed to write response: %v", err)
-			return "", "", err
+		}
+		if writeErr := s.WriteJson(res); writeErr != nil {
+			log.Printf("Failed to write res: %v", writeErr)
+			return "", "", writeErr
 		}
 		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
 		return "", "", err
@@ -95,7 +105,7 @@ func (c *SocketController) handleConnection(s socket.Socket, channelID, userID s
 		}
 		res, err := c.route(sig, channelID, userID)
 		if err != nil {
-			return fmt.Errorf("failed to route signal: %w", err)
+			log.Printf("Error routing signal (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
 		}
 		if err := s.WriteJson(res); err != nil {
 			return fmt.Errorf("failed to write response: %w", err)
@@ -105,34 +115,28 @@ func (c *SocketController) handleConnection(s socket.Socket, channelID, userID s
 
 // route directs a parsed request based on its type.
 func (c *SocketController) route(signal request.Signal, channelID, userID string) (response.Signal, error) {
-	log.Println("Signal received:", signal.Type)
+	log.Printf("Signal received (Type: %s, ChannelID: %s, UserID: %s)", signal.Type, channelID, userID)
+
+	handler, exists := c.handlers[signal.Type]
 	res := response.Signal{
 		RequestID: signal.RequestID,
 	}
-	var sdp string
-	var err error
-	switch signal.Type {
-	case PUSH:
-		sdp, err = c.coordinator.Push(channelID, userID, signal.SDP)
-	case PULL:
-		sdp, err = c.coordinator.Pull(channelID, userID, signal.SDP)
-	case FORWARD:
-		sdp, err = c.coordinator.Forward(channelID, userID, signal.SDP)
-	case FETCH:
-		sdp, err = c.coordinator.Fetch(channelID, userID, signal.SDP)
-	case ARRANGE:
-		sdp, err = c.coordinator.Arrange(channelID, userID, signal.SDP)
-	case RECONNECT:
-		sdp, err = c.coordinator.Reconnect(channelID, userID, signal.SDP)
-	default:
-		sdp, err = "", fmt.Errorf("unknown request type: %s", signal.Type)
+
+	if !exists {
+		err := fmt.Errorf("unknown request type: %s", signal.Type)
+		res.StatusCode = 400
+		res.SDP = err.Error()
+		return res, err
 	}
+
+	sdp, err := handler(channelID, userID, signal.SDP)
 	if err != nil {
 		res.StatusCode = 400
 		res.SDP = err.Error()
 		return res, err
 	}
+
 	res.StatusCode = 200
 	res.SDP = sdp
-	return res, err
+	return res, nil
 }
