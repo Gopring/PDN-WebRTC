@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/pion/webrtc/v4"
 	"io"
+	"log"
 	"pdn/media/connection"
 )
 
@@ -32,7 +33,7 @@ func (c *Channel) SetUpstream(conn *connection.Connection, id string) {
 		c.upstream, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", id)
 		if newTrackErr != nil {
 			// TODO(window9u): we should handle this panic properly.
-			panic(newTrackErr)
+			log.Println(newTrackErr)
 		}
 
 		rtpBuf := make([]byte, 1400)
@@ -40,7 +41,7 @@ func (c *Channel) SetUpstream(conn *connection.Connection, id string) {
 			i, _, readErr := remoteTrack.Read(rtpBuf)
 			if readErr != nil {
 				// TODO(window9u): we should handle this panic properly.
-				panic(readErr)
+				log.Println(newTrackErr)
 			}
 			if _, err := c.upstream.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 				panic(err)
