@@ -42,9 +42,11 @@ func (c *Channel) SetUpstream(conn *connection.Connection, id string) {
 			if readErr != nil {
 				// TODO(window9u): we should handle this panic properly.
 				log.Println(newTrackErr)
+				return
 			}
 			if _, err := c.upstream.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
-				panic(err)
+				log.Println(newTrackErr)
+				return
 			}
 		}
 	})
