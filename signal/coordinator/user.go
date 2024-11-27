@@ -3,7 +3,7 @@ package coordinator
 
 import (
 	"fmt"
-	"pdn/signal/controller/socket"
+	"pdn/pkg/socket"
 	"time"
 )
 
@@ -15,8 +15,8 @@ type User struct {
 }
 
 // Request send data to user
-func (u *User) Request(data string) error {
-	err := u.socket.Write(data)
+func (u *User) Request(data any) error {
+	err := u.socket.WriteJSON(data)
 	if err != nil {
 		return err
 	}

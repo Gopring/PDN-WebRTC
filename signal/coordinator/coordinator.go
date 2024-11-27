@@ -3,8 +3,10 @@ package coordinator
 
 import (
 	"fmt"
+	"log"
 	"pdn/media"
-	"pdn/signal/controller/socket"
+	"pdn/pkg/socket"
+	"pdn/types/api/response"
 	"time"
 )
 
@@ -30,25 +32,6 @@ func New(med media.Media) *MemoryCoordinator {
 	}
 }
 
-// RequestResponse send data to user and wait for response
-func (c *MemoryCoordinator) RequestResponse(channelID string, userID string, data string) (string, error) {
-	user, err := c.getUser(channelID, userID)
-	if err != nil {
-		return "", err
-	}
-
-	if err := user.Request(data); err != nil {
-		return "", fmt.Errorf("failed to send user")
-	}
-
-	sdp, err := user.WaitForResponse(waitResponse)
-	if err != nil {
-		return "", err
-	}
-
-	return sdp, nil
-}
-
 // Activate register and activate user
 func (c *MemoryCoordinator) Activate(channelID string, userID string, s socket.Socket) error {
 	_, exists := c.channels[channelID]
@@ -61,18 +44,6 @@ func (c *MemoryCoordinator) Activate(channelID string, userID string, s socket.S
 	ch.users[userID] = &User{
 		socket:   s,
 		response: make(chan string),
-	}
-	return nil
-}
-
-// Response send data to user
-func (c *MemoryCoordinator) Response(channelID, userID string, data string) error {
-	user, err := c.getUser(channelID, userID)
-	if err != nil {
-		return err
-	}
-	if err := user.Response(data, waitReceive); err != nil {
-		return fmt.Errorf("failed to answer %s", userID)
 	}
 	return nil
 }
@@ -90,27 +61,13 @@ func (c *MemoryCoordinator) Remove(channelID, userID string) error {
 	return nil
 }
 
-// getUser returns user from channel
-func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
-	channel, exists := c.channels[channelID]
-	if !exists {
-		return nil, fmt.Errorf("channel %s doesn't exists", channelID)
-	}
-
-	user, exists := channel.users[userID]
-	if !exists {
-		return nil, fmt.Errorf("user %s doesn't exists", userID)
-	}
-	return user, nil
-}
-
-// Send process send signal
-func (c *MemoryCoordinator) Send(channelID, userID, sdp string) (string, error) {
+// Push process send signal
+func (c *MemoryCoordinator) Push(channelID, userID, sdp string) (string, error) {
 	return c.media.AddSender(channelID, userID, sdp)
 }
 
-// Receive process receive signal
-func (c *MemoryCoordinator) Receive(channelID, userID, sdp string) (string, error) {
+// Pull process receive signal
+func (c *MemoryCoordinator) Pull(channelID, userID, sdp string) (string, error) {
 	return c.media.AddReceiver(channelID, userID, sdp)
 }
 
@@ -125,7 +82,13 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	forwarderSDP, err := c.RequestResponse(channelID, forwarderID, fetcherSDP)
+	log.Println("send forwarder to arrange (forwarderID):", forwarderID)
+	forwarderSDP, err := c.requestResponse(channelID, forwarderID, response.Arrange{
+		Type:       "ARRANGE",
+		StatusCode: 200,
+		SDP:        fetcherSDP,
+	})
+	log.Println("send forwarderSDP to fetcher")
 	if err != nil {
 		return "", err
 	}
@@ -134,14 +97,60 @@ func (c *MemoryCoordinator) Fetch(channelID, _, fetcherSDP string) (string, erro
 
 // Arrange process arrange signal.
 func (c *MemoryCoordinator) Arrange(channelID, userID, sdp string) (string, error) {
-	err := c.Response(channelID, userID, sdp)
+	log.Println("get Arrange request channelID:", channelID, "userID:", userID)
+	err := c.response(channelID, userID, sdp)
 	if err != nil {
 		return "", err
 	}
-	return "", nil
+	return "send your sdp to fetcher", nil
 }
 
 // Reconnect process reconnect signal.
 func (c *MemoryCoordinator) Reconnect(channelID, userID, sdp string) (string, error) {
 	return c.media.AddReceiver(channelID, userID, sdp)
+}
+
+// RequestResponse send data to user and wait for response
+func (c *MemoryCoordinator) requestResponse(channelID string, userID string, req any) (string, error) {
+	user, err := c.getUser(channelID, userID)
+	if err != nil {
+		return "", err
+	}
+
+	if err := user.Request(req); err != nil {
+		return "", fmt.Errorf("failed to send user")
+	}
+
+	sdp, err := user.WaitForResponse(waitResponse)
+	if err != nil {
+		return "", err
+	}
+
+	return sdp, nil
+}
+
+// Response send data to user
+func (c *MemoryCoordinator) response(channelID, userID string, data string) error {
+	user, err := c.getUser(channelID, userID)
+	if err != nil {
+		return err
+	}
+	if err := user.Response(data, waitReceive); err != nil {
+		return fmt.Errorf("failed to answer %s", userID)
+	}
+	return nil
+}
+
+// getUser returns user from channel
+func (c *MemoryCoordinator) getUser(channelID, userID string) (*User, error) {
+	channel, exists := c.channels[channelID]
+	if !exists {
+		return nil, fmt.Errorf("channel %s doesn't exists", channelID)
+	}
+
+	user, exists := channel.users[userID]
+	if !exists {
+		return nil, fmt.Errorf("user %s doesn't exists", userID)
+	}
+	return user, nil
 }

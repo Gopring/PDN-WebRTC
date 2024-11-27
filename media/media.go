@@ -45,8 +45,7 @@ func (m *PdnMedia) AddSender(channelID string, userID string, sdp string) (strin
 
 	ch.SetUpstream(conn, userID)
 
-	err = conn.StartICE()
-	if err != nil {
+	if err = conn.StartICE(); err != nil {
 		return "", fmt.Errorf("failed to start ICE: %w", err)
 	}
 	m.channels[channelID] = ch

@@ -26,10 +26,10 @@ func New(config Config) *Signal {
 	con := controller.New(cod, config.Debug)
 	mds := []middleware.Interceptor{
 		middleware.NewAuth(),
-		middleware.NewCORS(),
 		middleware.NewLogger(),
+		middleware.NewSocket(con),
 	}
-	mux := middleware.Set(con, mds...)
+	mux := middleware.Set(http.NewServeMux(), mds...)
 
 	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", config.Port),

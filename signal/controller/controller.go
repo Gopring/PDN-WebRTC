@@ -4,100 +4,139 @@ package controller
 import (
 	"fmt"
 	"log"
-	"net/http"
-	"pdn/signal/controller/socket"
+	"pdn/pkg/socket"
 	"pdn/signal/coordinator"
 	"pdn/types/api/request"
+	"pdn/types/api/response"
 )
 
+// Request types for signaling in the socket communication.
 const (
-	send      = "send"
-	receive   = "receive"
-	forward   = "forward"
-	fetch     = "fetch"
-	arrange   = "arrange"
-	reconnect = "reconnect"
+	PUSH      = "PUSH"
+	PULL      = "PULL"
+	FORWARD   = "FORWARD"
+	FETCH     = "FETCH"
+	ARRANGE   = "ARRANGE"
+	RECONNECT = "RECONNECT"
 )
 
 // SocketController handles HTTP requests.
 type SocketController struct {
 	coordinator coordinator.Coordinator
 	debug       bool
+	handlers    map[string]func(string, string, string) (string, error)
 }
 
-// New creates a new instance of Handler.
-func New(c *coordinator.MemoryCoordinator, isDebug bool) *SocketController {
+// New creates a new instance of SocketController.
+func New(c coordinator.Coordinator, isDebug bool) *SocketController {
 	return &SocketController{
 		coordinator: c,
 		debug:       isDebug,
+		handlers: map[string]func(string, string, string) (string, error){
+			PUSH:      c.Push,
+			PULL:      c.Pull,
+			FORWARD:   c.Forward,
+			FETCH:     c.Fetch,
+			ARRANGE:   c.Arrange,
+			RECONNECT: c.Reconnect,
+		},
 	}
 }
 
-// ServeHTTP handles HTTP requests.
-func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s, err := socket.New(w, r)
+// Process handles HTTP requests.
+func (c *SocketController) Process(s socket.Socket) error {
+	channelID, userID, err := c.activate(s)
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
-	req := request.Activate{}
+
+	log.Printf("Connection established (ChannelID: %s, UserID: %s)", channelID, userID)
+	if err := c.handleConnection(s, channelID, userID); err != nil {
+		return fmt.Errorf("connection handling error (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	}
+
+	if err := c.coordinator.Remove(channelID, userID); err != nil {
+		log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	}
+
+	return nil
+}
+
+func (c *SocketController) activate(s socket.Socket) (string, string, error) {
+	var req request.Activate
+
 	if err := s.Read(&req); err != nil {
-		log.Println(err)
-		return
+		log.Printf("Failed to read activation request: %v", err)
+		return "", "", err
 	}
 
 	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
-		log.Println(err)
-		return
+		res := response.Activate{
+			RequestID:  req.RequestID,
+			StatusCode: 400,
+			Message:    err.Error(),
+		}
+		if writeErr := s.WriteJSON(res); writeErr != nil {
+			log.Printf("Failed to write res: %v", writeErr)
+			return "", "", writeErr
+		}
+		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
+		return "", "", err
 	}
 
-	defer func(sk *socket.WebSocket) {
-		if err := c.coordinator.Remove(req.ChannelID, req.UserID); err != nil {
-			log.Println(err)
-			return
-		}
-		if err := sk.Close(); err != nil {
-			log.Println(err)
-			return
-		}
-	}(s)
+	if err := s.WriteJSON(response.Activate{
+		RequestID:  req.RequestID,
+		StatusCode: 200,
+		Message:    "Connection established",
+	}); err != nil {
+		log.Printf("Failed to write response: %v", err)
+		return "", "", err
+	}
 
-	channelID := req.ChannelID
-	userID := req.UserID
+	return req.ChannelID, req.UserID, nil
+}
+
+// handleConnection processes incoming signals in a loop.
+func (c *SocketController) handleConnection(s socket.Socket, channelID, userID string) error {
 	for {
-		sig := request.Signal{}
+		var sig request.Signal
 		if err := s.Read(&sig); err != nil {
-			log.Println(err)
-			return
+			return fmt.Errorf("failed to read signal: %w", err)
 		}
 		res, err := c.route(sig, channelID, userID)
 		if err != nil {
-			log.Println(err)
-			return
+			log.Printf("Error routing signal (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
 		}
-		if err = s.Write(res); err != nil {
-			log.Println(err)
-			return
+		if err := s.WriteJSON(res); err != nil {
+			return fmt.Errorf("failed to write response: %w", err)
 		}
 	}
 }
 
-// route routes a parsed request based on its type
-func (c *SocketController) route(signal request.Signal, channelID, userID string) (string, error) {
-	switch signal.Type {
-	case send:
-		return c.coordinator.Send(channelID, userID, signal.SDP)
-	case receive:
-		return c.coordinator.Receive(channelID, userID, signal.SDP)
-	case forward:
-		return c.coordinator.Forward(channelID, userID, signal.SDP)
-	case fetch:
-		return c.coordinator.Fetch(channelID, userID, signal.SDP)
-	case arrange:
-		return c.coordinator.Arrange(channelID, userID, signal.SDP)
-	case reconnect:
-		return c.coordinator.Reconnect(channelID, userID, signal.SDP)
-	default:
-		return "", fmt.Errorf("unknown request type: %s", signal.Type)
+// route directs a parsed request based on its type.
+func (c *SocketController) route(signal request.Signal, channelID, userID string) (response.Signal, error) {
+	log.Printf("Signal received (Type: %s, ChannelID: %s, UserID: %s)", signal.Type, channelID, userID)
+
+	handler, exists := c.handlers[signal.Type]
+	res := response.Signal{
+		RequestID: signal.RequestID,
 	}
+
+	if !exists {
+		err := fmt.Errorf("unknown request type: %s", signal.Type)
+		res.StatusCode = 400
+		res.SDP = err.Error()
+		return res, err
+	}
+
+	sdp, err := handler(channelID, userID, signal.SDP)
+	if err != nil {
+		res.StatusCode = 400
+		res.SDP = err.Error()
+		return res, err
+	}
+
+	res.StatusCode = 200
+	res.SDP = sdp
+	return res, nil
 }
