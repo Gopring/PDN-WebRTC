@@ -7,6 +7,6 @@ package socket
 type Socket interface {
 	Close() error
 	Write(data string) error
-	WriteJson(data any) error
+	WriteJSON(data any) error
 	Read(v any) error
 }

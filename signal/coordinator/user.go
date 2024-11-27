@@ -16,7 +16,7 @@ type User struct {
 
 // Request send data to user
 func (u *User) Request(data any) error {
-	err := u.socket.WriteJson(data)
+	err := u.socket.WriteJSON(data)
 	if err != nil {
 		return err
 	}

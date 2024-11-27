@@ -76,7 +76,7 @@ func (c *SocketController) activate(s socket.Socket) (string, string, error) {
 			StatusCode: 400,
 			Message:    err.Error(),
 		}
-		if writeErr := s.WriteJson(res); writeErr != nil {
+		if writeErr := s.WriteJSON(res); writeErr != nil {
 			log.Printf("Failed to write res: %v", writeErr)
 			return "", "", writeErr
 		}
@@ -84,7 +84,7 @@ func (c *SocketController) activate(s socket.Socket) (string, string, error) {
 		return "", "", err
 	}
 
-	if err := s.WriteJson(response.Activate{
+	if err := s.WriteJSON(response.Activate{
 		RequestID:  req.RequestID,
 		StatusCode: 200,
 		Message:    "Connection established",
@@ -107,7 +107,7 @@ func (c *SocketController) handleConnection(s socket.Socket, channelID, userID s
 		if err != nil {
 			log.Printf("Error routing signal (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
 		}
-		if err := s.WriteJson(res); err != nil {
+		if err := s.WriteJSON(res); err != nil {
 			return fmt.Errorf("failed to write response: %w", err)
 		}
 	}

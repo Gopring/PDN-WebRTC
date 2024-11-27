@@ -14,7 +14,7 @@ type WebSocket struct {
 // New creates a new WebSocket connection by upgrading the HTTP request.
 func New(w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 	ug := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
+		CheckOrigin: func(_ *http.Request) bool {
 			return true
 		},
 	}
@@ -41,8 +41,8 @@ func (s *WebSocket) Write(data string) error {
 	return nil
 }
 
-// WriteJson sends a text message to the WebSocket connection.
-func (s *WebSocket) WriteJson(data any) error {
+// WriteJSON sends a text message to the WebSocket connection.
+func (s *WebSocket) WriteJSON(data any) error {
 	if err := s.conn.WriteJSON(data); err != nil {
 		return err
 	}
