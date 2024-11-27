@@ -27,6 +27,9 @@ func StartTestSignal() {
 
 // TestBroadcast tests basic workflow of broadcast and view.
 func TestBroadcast(t *testing.T) {
+	// I skipped this test because this test logic is not implemented yet.
+	// for details, client in this test code doesn't send ice-ufrag and ice-pwd.
+	// this is because the client sends sdp before get all ice candidates.
 	t.Skipf("Skip this test because it is not implemented yet")
 	go StartTestSignal()
 	broadcaster, err := New("localhost:8080", "test", "test")
