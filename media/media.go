@@ -4,6 +4,7 @@ package media
 import (
 	"fmt"
 	"github.com/pion/webrtc/v4"
+	"pdn/broker"
 	"pdn/media/channel"
 	"pdn/media/connection"
 )
@@ -16,14 +17,16 @@ type Func func(channelID string, userID string, sdp string) (string, error)
 // and be used as a standalone package.
 type PdnMedia struct {
 	// TODO(window9u): we should add locker for channels.
+	broker           broker.Broker
 	channels         map[string]*channel.Channel
 	connectionConfig webrtc.Configuration
 }
 
 // New creates a new PdnMedia instance.
 // TODO(window9u): we should add more configuration options.
-func New() *PdnMedia {
+func New(b broker.Broker) *PdnMedia {
 	return &PdnMedia{
+		broker:   b,
 		channels: map[string]*channel.Channel{},
 		connectionConfig: webrtc.Configuration{
 			ICEServers: []webrtc.ICEServer{
