@@ -48,12 +48,12 @@ func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 01. Register client to broker
-	if err := c.broker.Register(broker.CLIENT, broker.DETAIL(channelID+userID)); err != nil {
+	if err := c.broker.Register(broker.CLIENT, broker.FROM(channelID+userID)); err != nil {
 		log.Printf("Failed to publish to broker: %v", err)
 		return
 	}
 	defer func() {
-		if err := c.broker.Unregister(broker.CLIENT, broker.DETAIL(channelID+userID)); err != nil {
+		if err := c.broker.Unregister(broker.CLIENT, broker.FROM(channelID+userID)); err != nil {
 			log.Printf("Failed to unregister broker: %v", err)
 		}
 	}()
@@ -90,7 +90,7 @@ func (c *SocketController) authenticate(s socket.Socket) (string, string, error)
 }
 
 func (c *SocketController) response(s socket.Socket, channelID, userID string) {
-	ch, err := c.broker.Subscribe(broker.CLIENT, broker.DETAIL(channelID+userID))
+	ch, err := c.broker.Subscribe(broker.CLIENT, broker.FROM(channelID+userID))
 	if err != nil {
 		log.Printf("Failed to subscribe to broker: %v", err)
 		return
@@ -119,16 +119,15 @@ func (c *SocketController) publish(s socket.Socket, channelID, userID string) er
 		// 02. publish message to broker
 		switch req.Type {
 		case PUSH:
-			if err := c.broker.Publish(broker.PUSH, message.Push{
+			if err := c.broker.Publish(broker.PUSH, broker.CONTROLLER, message.Push{
 				ChannelID: channelID,
 				UserID:    userID,
 				SDP:       req.SDP,
 			}); err != nil {
 				log.Printf("Failed to publish to broker: %v", err)
-				return err
 			}
 		case PULL:
-			if err := c.broker.Publish(broker.PULL, message.Pull{
+			if err := c.broker.Publish(broker.PULL, broker.CONTROLLER, message.Pull{
 				ChannelID: channelID,
 				UserID:    userID,
 				SDP:       req.SDP,
