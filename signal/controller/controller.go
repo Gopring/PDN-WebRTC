@@ -19,11 +19,11 @@ const (
 
 // SocketController handles HTTP requests.
 type SocketController struct {
-	broker broker.Broker
+	broker *broker.Broker
 }
 
 // New creates a new instance of SocketController.
-func New(b broker.Broker) *SocketController {
+func New(b *broker.Broker) *SocketController {
 	return &SocketController{
 		broker: b,
 	}
