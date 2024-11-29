@@ -4,91 +4,84 @@ package controller
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"pdn/broker"
 	"pdn/pkg/socket"
-	"pdn/signal/coordinator"
 	"pdn/types/api/request"
 	"pdn/types/api/response"
+	"pdn/types/message"
 )
 
-// Request types for signaling in the socket communication.
 const (
-	PUSH      = "PUSH"
-	PULL      = "PULL"
-	FORWARD   = "FORWARD"
-	FETCH     = "FETCH"
-	ARRANGE   = "ARRANGE"
-	RECONNECT = "RECONNECT"
+	PUSH = "PUSH"
+	PULL = "PULL"
 )
 
 // SocketController handles HTTP requests.
 type SocketController struct {
-	coordinator coordinator.Coordinator
-	debug       bool
-	handlers    map[string]func(string, string, string) (string, error)
+	broker broker.Broker
 }
 
 // New creates a new instance of SocketController.
-func New(c coordinator.Coordinator, isDebug bool) *SocketController {
+func New(b broker.Broker) *SocketController {
 	return &SocketController{
-		coordinator: c,
-		debug:       isDebug,
-		handlers: map[string]func(string, string, string) (string, error){
-			PUSH:      c.Push,
-			PULL:      c.Pull,
-			FORWARD:   c.Forward,
-			FETCH:     c.Fetch,
-			ARRANGE:   c.Arrange,
-			RECONNECT: c.Reconnect,
-		},
+		broker: b,
 	}
 }
 
 // Process handles HTTP requests.
-func (c *SocketController) Process(s socket.Socket) error {
-	channelID, userID, err := c.activate(s)
+func (c *SocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s, err := socket.New(w, r)
 	if err != nil {
-		return err
+		log.Printf("Failed to create WebSocket: %v", err)
+		return
+	}
+	defer func() {
+		if err := s.Close(); err != nil {
+			log.Printf("Failed to close WebSocket: %v", err)
+		}
+	}()
+
+	channelID, userID, err := c.authenticate(s)
+	if err != nil {
+		return
 	}
 
-	log.Printf("Connection established (ChannelID: %s, UserID: %s)", channelID, userID)
-	if err := c.handleConnection(s, channelID, userID); err != nil {
-		return fmt.Errorf("connection handling error (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	// 01. Register client to broker
+	if err := c.broker.Register(broker.CLIENT, broker.DETAIL(channelID+userID)); err != nil {
+		log.Printf("Failed to publish to broker: %v", err)
+		return
 	}
+	defer func() {
+		if err := c.broker.Unregister(broker.CLIENT, broker.DETAIL(channelID+userID)); err != nil {
+			log.Printf("Failed to unregister broker: %v", err)
+		}
+	}()
 
-	if err := c.coordinator.Remove(channelID, userID); err != nil {
-		log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	// 02. subscribe itself
+	go c.response(s, channelID, userID)
+
+	// 03. send message to broker
+	if err := c.publish(s, channelID, userID); err != nil {
+		return
 	}
-
-	return nil
 }
 
-func (c *SocketController) activate(s socket.Socket) (string, string, error) {
+func (c *SocketController) authenticate(s socket.Socket) (string, string, error) {
 	var req request.Activate
 
-	if err := s.Read(&req); err != nil {
+	if err := s.ReadJSON(&req); err != nil {
 		log.Printf("Failed to read activation request: %v", err)
 		return "", "", err
 	}
 
-	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
-		res := response.Activate{
-			RequestID:  req.RequestID,
-			StatusCode: 400,
-			Message:    err.Error(),
-		}
-		if writeErr := s.WriteJSON(res); writeErr != nil {
-			log.Printf("Failed to write res: %v", writeErr)
-			return "", "", writeErr
-		}
-		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
-		return "", "", err
-	}
-
-	if err := s.WriteJSON(response.Activate{
+	res := response.Activate{
 		RequestID:  req.RequestID,
 		StatusCode: 200,
 		Message:    "Connection established",
-	}); err != nil {
+	}
+
+	if err := s.WriteJSON(res); err != nil {
 		log.Printf("Failed to write response: %v", err)
 		return "", "", err
 	}
@@ -96,47 +89,55 @@ func (c *SocketController) activate(s socket.Socket) (string, string, error) {
 	return req.ChannelID, req.UserID, nil
 }
 
-// handleConnection processes incoming signals in a loop.
-func (c *SocketController) handleConnection(s socket.Socket, channelID, userID string) error {
+func (c *SocketController) response(s socket.Socket, channelID, userID string) {
+	ch, err := c.broker.Subscribe(broker.CLIENT, broker.DETAIL(channelID+userID))
+	if err != nil {
+		log.Printf("Failed to subscribe to broker: %v", err)
+		return
+	}
 	for {
-		var sig request.Signal
-		if err := s.Read(&sig); err != nil {
-			return fmt.Errorf("failed to read signal: %w", err)
+		msg, ok := <-ch
+		if !ok {
+			return
 		}
-		res, err := c.route(sig, channelID, userID)
-		if err != nil {
-			log.Printf("Error routing signal (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
-		}
-		if err := s.WriteJSON(res); err != nil {
-			return fmt.Errorf("failed to write response: %w", err)
+		if err := s.WriteJSON(msg); err != nil {
+			log.Printf("Failed to write message: %v", err)
+			return
 		}
 	}
 }
 
-// route directs a parsed request based on its type.
-func (c *SocketController) route(signal request.Signal, channelID, userID string) (response.Signal, error) {
-	log.Printf("Signal received (Type: %s, ChannelID: %s, UserID: %s)", signal.Type, channelID, userID)
+func (c *SocketController) publish(s socket.Socket, channelID, userID string) error {
+	for {
+		// 01. read message from client
+		var req request.Signal
+		if err := s.ReadJSON(req); err != nil {
+			log.Printf("Failed to read message: %v", err)
+			return err
+		}
 
-	handler, exists := c.handlers[signal.Type]
-	res := response.Signal{
-		RequestID: signal.RequestID,
+		// 02. publish message to broker
+		switch req.Type {
+		case PUSH:
+			if err := c.broker.Publish(broker.PUSH, message.Push{
+				ChannelID: channelID,
+				UserID:    userID,
+				SDP:       req.SDP,
+			}); err != nil {
+				log.Printf("Failed to publish to broker: %v", err)
+				return err
+			}
+		case PULL:
+			if err := c.broker.Publish(broker.PULL, message.Pull{
+				ChannelID: channelID,
+				UserID:    userID,
+				SDP:       req.SDP,
+			}); err != nil {
+				log.Printf("Failed to publish to broker: %v", err)
+			}
+		default:
+			return fmt.Errorf("invalid type: %s", req.Type)
+		}
+
 	}
-
-	if !exists {
-		err := fmt.Errorf("unknown request type: %s", signal.Type)
-		res.StatusCode = 400
-		res.SDP = err.Error()
-		return res, err
-	}
-
-	sdp, err := handler(channelID, userID, signal.SDP)
-	if err != nil {
-		res.StatusCode = 400
-		res.SDP = err.Error()
-		return res, err
-	}
-
-	res.StatusCode = 200
-	res.SDP = sdp
-	return res, nil
 }
