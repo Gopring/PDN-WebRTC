@@ -33,14 +33,6 @@ func (s *WebSocket) Close() error {
 	return s.conn.Close()
 }
 
-// Write sends a text message to the WebSocket connection.
-func (s *WebSocket) Write(data string) error {
-	if err := s.conn.WriteMessage(websocket.TextMessage, []byte(data)); err != nil {
-		return err
-	}
-	return nil
-}
-
 // WriteJSON sends a text message to the WebSocket connection.
 func (s *WebSocket) WriteJSON(data any) error {
 	if err := s.conn.WriteJSON(data); err != nil {
@@ -49,7 +41,7 @@ func (s *WebSocket) WriteJSON(data any) error {
 	return nil
 }
 
-// Read reads a JSON message from the WebSocket connection and unmarshals it into the provided variable.
-func (s *WebSocket) Read(v any) error {
+// ReadJSON reads a JSON message from the WebSocket connection and unmarshals it into the provided variable.
+func (s *WebSocket) ReadJSON(v any) error {
 	return s.conn.ReadJSON(v)
 }
