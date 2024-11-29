@@ -64,11 +64,11 @@ func (c *Channel) SetDownstream(conn *connection.Connection, id string) error {
 		return fmt.Errorf("failed to add track: %w", err)
 	}
 
-	// Read RTCP packets
+	// ReadJSON RTCP packets
 	go func() {
 		rtcpBuf := make([]byte, 1500)
 		for {
-			// Read RTCP packets
+			// ReadJSON RTCP packets
 			if _, _, rtcpErr := rtpSender.Read(rtcpBuf); rtcpErr != nil {
 				return
 			}

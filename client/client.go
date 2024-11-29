@@ -56,7 +56,7 @@ func (c *Client) push(data any) (string, error) {
 		return "", fmt.Errorf("failed to PUSH data: %w", err)
 	}
 
-	// Read the response
+	// ReadJSON the response
 	_, message, err := c.socket.ReadMessage()
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
