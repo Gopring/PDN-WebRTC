@@ -1,17 +1,19 @@
 package broker
 
 const (
-	AUTH = iota
-	CLIENT
+	CLIENT = iota
 	PULL
 	PUSH
-	MEDIA
-	CLASSIFIER
-	COORDINATOR
+)
+
+const (
+	CONTROLLER  = "CLIENT"
+	COORDINATOR = "COORDINATOR"
+	CLASSIFIER  = "CLASSIFIER"
 )
 
 type TOPIC int
-type DETAIL string
+type FROM string
 
 type Broker struct {
 }
@@ -20,26 +22,26 @@ func New() *Broker {
 	return &Broker{}
 }
 
-func (b *Broker) Publish(topic TOPIC, message interface{}) error {
+func (b *Broker) Publish(topic TOPIC, from FROM, message interface{}) error {
 	return nil
 }
 
-func (b *Broker) SendAndWait(topic TOPIC, detail DETAIL, message []byte) ([]byte, error) {
+func (b *Broker) Send(topic TOPIC, to string, message interface{}) error {
+	return nil
+}
+
+func (b *Broker) Register(topic TOPIC, from FROM) error {
+	return nil
+}
+
+func (b *Broker) Unregister(topic TOPIC, from FROM) error {
+	return nil
+}
+
+func (b *Broker) Subscribe(topic TOPIC, from FROM) (<-chan any, error) {
 	return nil, nil
 }
 
-func (b *Broker) Register(topic TOPIC, detail DETAIL) error {
-	return nil
-}
-
-func (b *Broker) Unregister(topic TOPIC, detail DETAIL) error {
-	return nil
-}
-
-func (b *Broker) Subscribe(topic TOPIC, detail DETAIL) (<-chan []byte, error) {
-	return nil, nil
-}
-
-func (b *Broker) Unsubscribe(topic TOPIC, ch <-chan []byte) error {
+func (b *Broker) Unsubscribe(topic TOPIC, from FROM, ch <-chan []byte) error {
 	return nil
 }
