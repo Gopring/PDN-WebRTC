@@ -11,4 +11,4 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - host.docker.internal:9090
+          - prometheus:9090
