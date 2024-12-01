@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"pdn/metric"
 	"pdn/signal"
 )
 
@@ -17,7 +18,13 @@ func Run() {
 		os.Exit(1)
 	}
 
-	s := signal.New(config)
+	// Setup metrics configuration
+	metricsConfig := metric.Config{
+		Port: metric.DefaultMetricsPort,
+		Path: metric.DefaultMetricsPath,
+	}
+
+	s := signal.New(config, metricsConfig)
 	if err = s.Start(); err != nil {
 		os.Exit(1)
 	}
