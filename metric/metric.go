@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"runtime"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/net"
 )
 
 // Metrics contains the Prometheus metrics server and registered custom metrics.
@@ -73,12 +75,13 @@ func (m *Metrics) RegisterMetrics() {
 }
 
 // Start initializes and starts the metrics HTTP server.
-func (m *Metrics) Start() {
+func (m *Metrics) Start(stop <-chan struct{}) {
 	m.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", m.config.Port),
 		Handler: promhttp.Handler(),
 	}
 
+	go m.UpdateSystemMetrics(stop)
 	go func() {
 		log.Printf("Starting metrics server on port %d at path %s", m.config.Port, m.config.Path)
 		if err := m.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -97,20 +100,53 @@ func (m *Metrics) Stop() error {
 }
 
 // UpdateSystemMetrics collects and updates system-level metrics (e.g., memory usage).
-func (m *Metrics) UpdateSystemMetrics() {
+func (m *Metrics) UpdateSystemMetrics(stop <-chan struct{}) {
 	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
 		for {
-			// Collect memory statistics
-			var memStats runtime.MemStats
-			runtime.ReadMemStats(&memStats)
-			m.memoryUsage.Set(float64(memStats.Alloc))
-
-			// Placeholder: Update CPU usage (requires external library or implementation)
-			// Example: m.cpuUsage.Set(getCurrentCPUUsage())
-
-			time.Sleep(5 * time.Second) // Update interval
+			select {
+			case <-ticker.C:
+				m.collectMetrics()
+			case <-stop:
+				log.Println("Stopping metrics collection")
+				return
+			}
 		}
 	}()
+}
+
+// collectMetrics collects individual system metrics.
+func (m *Metrics) collectMetrics() {
+	// Collect CPU usage
+	if percentages, err := cpu.Percent(1*time.Second, false); err == nil && len(percentages) > 0 {
+		m.cpuUsage.Set(percentages[0])
+		log.Printf("CPU usage updated: %.2f%%", percentages[0])
+	} else {
+		log.Printf("Error fetching CPU usage: %v", err)
+	}
+
+	// Collect memory usage
+	if vmStats, err := mem.VirtualMemory(); err == nil {
+		m.memoryUsage.Set(float64(vmStats.Used))
+		log.Printf("Memory usage updated: %v bytes", vmStats.Used)
+	} else {
+		log.Printf("Error fetching memory usage: %v", err)
+	}
+
+	// Collect network usage
+	if ioStats, err := net.IOCounters(false); err == nil && len(ioStats) > 0 {
+		totalRecv, totalSent := 0.0, 0.0
+		for _, stat := range ioStats {
+			totalRecv += float64(stat.BytesRecv)
+			totalSent += float64(stat.BytesSent)
+		}
+		m.UpdateNetworkUsage("inbound", totalRecv)
+		m.UpdateNetworkUsage("outbound", totalSent)
+		log.Printf("Network usage updated: Inbound=%.0f bytes, Outbound=%.0f bytes", totalRecv, totalSent)
+	} else {
+		log.Printf("Error fetching network usage: %v", err)
+	}
 }
 
 // IncrementWebSocketConnections increments the WebSocket connection count.
