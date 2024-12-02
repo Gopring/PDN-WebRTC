@@ -2,6 +2,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
@@ -29,10 +30,10 @@ func New(b *broker.Broker) *Controller {
 }
 
 // Process handles HTTP requests.
-func (c *Controller) Process(socket *websocket.Conn) {
+func (c *Controller) Process(socket *websocket.Conn) error {
 	channelID, userID, err := c.authenticate(socket)
 	if err != nil {
-		return
+		return err
 	}
 
 	// 02. subscribe itself
@@ -40,26 +41,23 @@ func (c *Controller) Process(socket *websocket.Conn) {
 
 	// 03. sendResponse message to broker
 	if err := c.receiveRequest(socket, channelID, userID); err != nil {
-		return
+		return err
 	}
+	return nil
 }
 
 func (c *Controller) authenticate(s *websocket.Conn) (string, string, error) {
 	var req request.Activate
 
 	if err := s.ReadJSON(&req); err != nil {
-		log.Printf("Failed to read activation receiveRequest: %v", err)
 		return "", "", err
 	}
 
-	res := response.Activate{
+	if err := s.WriteJSON(response.Activate{
 		RequestID:  req.RequestID,
 		StatusCode: 200,
 		Message:    "Connection established",
-	}
-
-	if err := s.WriteJSON(res); err != nil {
-		log.Printf("Failed to sendResponse sendResponse: %v", err)
+	}); err != nil {
 		return "", "", err
 	}
 
@@ -69,34 +67,41 @@ func (c *Controller) authenticate(s *websocket.Conn) (string, string, error) {
 func (c *Controller) receiveRequest(s *websocket.Conn, channelID, userID string) error {
 	for {
 		// 01. read message from client
-		var req request.Signal
+		var req request.Common
 		if err := s.ReadJSON(req); err != nil {
-			log.Printf("Failed to read message: %v", err)
 			return err
 		}
-
 		// 02. receiveRequest message to broker
 		switch req.Type {
 		case PUSH:
+			var payload request.Push
+			if err := json.Unmarshal(req.Payload, &payload); err != nil {
+				return err
+			}
 			if err := c.broker.Publish(broker.ClientMessage, broker.PUSH, message.Push{
+				Common:    message.Common{RequestID: req.RequestID},
 				ChannelID: channelID,
 				UserID:    userID,
-				SDP:       req.SDP,
+				SDP:       payload.SDP,
 			}); err != nil {
-				log.Printf("Failed to receiveRequest to broker: %v", err)
+				return err
 			}
 		case PULL:
+			var payload request.Pull
+			if err := json.Unmarshal(req.Payload, &payload); err != nil {
+				return err
+			}
 			if err := c.broker.Publish(broker.ClientMessage, broker.PULL, message.Pull{
+				Common:    message.Common{RequestID: req.RequestID},
 				ChannelID: channelID,
 				UserID:    userID,
-				SDP:       req.SDP,
+				SDP:       payload.SDP,
 			}); err != nil {
-				log.Printf("Failed to receiveRequest to broker: %v", err)
+				return err
 			}
 		default:
 			return fmt.Errorf("invalid type: %s", req.Type)
 		}
-
 	}
 }
 
