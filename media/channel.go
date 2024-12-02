@@ -11,21 +11,16 @@ import (
 
 // Channel manages connections
 type Channel struct {
-	// TODO(window9u): we should add locker for connections.
-	connections map[string]*webrtc.PeerConnection
-	upstream    *webrtc.TrackLocalStaticRTP
+	upstream *webrtc.TrackLocalStaticRTP
 }
 
 // NewChannel creates a new Channel instance.
 func NewChannel() *Channel {
-	return &Channel{
-		connections: map[string]*webrtc.PeerConnection{},
-	}
+	return &Channel{}
 }
 
 // SetUpstream sets the upstream connection.
 func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
-	c.connections[id] = conn
 	conn.OnTrack(func(remoteTrack *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		var newTrackErr error
 		c.upstream, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", id)
@@ -51,12 +46,11 @@ func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
 }
 
 // SetDownstream sets the downstream connection.
-func (c *Channel) SetDownstream(conn *webrtc.PeerConnection, id string) error {
+func (c *Channel) SetDownstream(conn *webrtc.PeerConnection, _ string) error {
 	if c.upstream == nil {
 		return errors.New("upstream not exists")
 	}
 
-	c.connections[id] = conn
 	rtpSender, err := conn.AddTrack(c.upstream)
 	if err != nil {
 		return fmt.Errorf("failed to add track: %w", err)
