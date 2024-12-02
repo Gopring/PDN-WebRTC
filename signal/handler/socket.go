@@ -1,4 +1,4 @@
-// Package socket provides an interface for managing socket.
+// Package handler provides an interface for managing socket.
 package handler
 
 import (
@@ -20,6 +20,7 @@ func New(c *controller.Controller) *Handler {
 	}
 }
 
+// ServeHTTP handles the HTTP request and upgrades it to websocket connection.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ug := websocket.Upgrader{
 		CheckOrigin: func(_ *http.Request) bool {
@@ -38,5 +39,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}(conn)
-	h.controller.Process(conn)
+	if err := h.controller.Process(conn); err != nil {
+		log.Printf("Error occurs in connection %v", err)
+	}
 }
