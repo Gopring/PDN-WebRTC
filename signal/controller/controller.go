@@ -7,8 +7,8 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"pdn/broker"
-	"pdn/types/api/request"
-	"pdn/types/api/response"
+	"pdn/types/client/request"
+	"pdn/types/client/response"
 	"pdn/types/message"
 )
 
@@ -66,12 +66,10 @@ func (c *Controller) authenticate(s *websocket.Conn) (string, string, error) {
 
 func (c *Controller) receiveRequest(s *websocket.Conn, channelID, userID string) error {
 	for {
-		// 01. read message from client
 		var req request.Common
 		if err := s.ReadJSON(req); err != nil {
 			return err
 		}
-		// 02. receiveRequest message to broker
 		switch req.Type {
 		case PUSH:
 			var payload request.Push

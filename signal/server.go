@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"pdn/broker"
+	"pdn/media"
 	"pdn/signal/controller"
+	"pdn/signal/handler"
 	"time"
 )
 
@@ -20,11 +22,12 @@ type Signal struct {
 func New(config Config) *Signal {
 	brk := broker.New()
 	con := controller.New(brk)
-
+	med := media.New(brk)
+	go med.Run()
 	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", config.Port),
 		ReadTimeout: 2 * time.Second,
-		Handler:     con,
+		Handler:     handler.New(con),
 	}
 	return &Signal{
 		server: srv,

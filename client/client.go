@@ -51,7 +51,7 @@ func (c *Client) dial() error {
 
 // push sends a signal to the WebSocket server and receives a response.
 func (c *Client) push(data any) (string, error) {
-	// Push the data as JSON to the WebSocket server
+	// AddUpstream the data as JSON to the WebSocket server
 	if err := c.socket.WriteJSON(data); err != nil {
 		return "", fmt.Errorf("failed to PUSH data: %w", err)
 	}
@@ -133,11 +133,10 @@ func (c *Client) Push(localTrack *webrtc.TrackLocalStaticRTP) error {
 	}
 	log.Println("Local Description Set:", conn.LocalDescription().SDP)
 
-	// 5. Push the offer (SDP) to the server to initiate broadcasting
+	// 5. AddUpstream the offer (SDP) to the server to initiate broadcasting
 	//    and PULL the server's SDP answer.
-	remoteSDP, err := c.push(request.Signal{
-		Type: PUSH,
-		SDP:  offer.SDP,
+	remoteSDP, err := c.push(request.Push{
+		SDP: offer.SDP,
 	})
 	if err != nil {
 		return err
@@ -167,11 +166,10 @@ func (c *Client) Pull(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) er
 	// 3. Add track to receive
 	conn.OnTrack(consume)
 
-	// 4. Push the offer (SDP) to the server to initiate broadcasting
+	// 4. AddUpstream the offer (SDP) to the server to initiate broadcasting
 	//    and PULL the server's SDP answer.
-	signal := request.Signal{
-		Type: PULL,
-		SDP:  offer.SDP,
+	signal := request.Pull{
+		SDP: offer.SDP,
 	}
 	remoteSDP, err := c.push(signal)
 	if err != nil {
@@ -204,11 +202,10 @@ func (c *Client) Fetch(consume func(*webrtc.TrackRemote, *webrtc.RTPReceiver)) e
 	// 3. Add track to PUSH
 	conn.OnTrack(consume)
 
-	// 4. Push the offer (SDP) to the server to initiate broadcasting
+	// 4. AddUpstream the offer (SDP) to the server to initiate broadcasting
 	//    and PULL the server's SDP answer.
-	signal := request.Signal{
-		Type: FETCH,
-		SDP:  offer.SDP,
+	signal := request.Push{
+		SDP: offer.SDP,
 	}
 	remoteSDP, err := c.push(signal)
 	if err != nil {
@@ -255,11 +252,10 @@ func (c *Client) Forward() error {
 		}
 	})
 
-	// 4. Push the offer (SDP) to the server to initiate broadcasting
+	// 4. AddUpstream the offer (SDP) to the server to initiate broadcasting
 	//    and PULL the server's SDP answer.
-	signal := request.Signal{
-		Type: FORWARD,
-		SDP:  offer.SDP,
+	signal := request.Push{
+		SDP: offer.SDP,
 	}
 	remoteSDP, err := c.push(signal)
 	if err != nil {
@@ -309,9 +305,8 @@ func (c *Client) Arrange(offer string) error {
 		}
 	}()
 
-	sig := request.Signal{
-		Type: ARRANGE,
-		SDP:  answer.SDP,
+	sig := request.Pull{
+		SDP: answer.SDP,
 	}
 
 	// 6. Set sdp answer to the server for broadcasting

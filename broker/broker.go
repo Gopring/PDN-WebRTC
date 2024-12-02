@@ -8,6 +8,7 @@ import (
 const (
 	ClientSocket = iota
 	ClientMessage
+	Media
 )
 
 const (
