@@ -19,14 +19,14 @@ type Func func(channelID string, userID string, sdp string) (string, error)
 // and be used as a standalone package.
 type Media struct {
 	// TODO(window9u): we should add locker for channels.
-	broker           broker.Broker
+	broker           *broker.Broker
 	channels         map[string]*channel.Channel
 	connectionConfig webrtc.Configuration
 }
 
 // New creates a new Media instance.
 // TODO(window9u): we should add more configuration options.
-func New(b broker.Broker) *Media {
+func New(b *broker.Broker) *Media {
 	return &Media{
 		broker:   b,
 		channels: map[string]*channel.Channel{},
@@ -41,50 +41,45 @@ func New(b broker.Broker) *Media {
 }
 
 func (m *Media) Run() error {
-	pushEvent, err := m.broker.Subscribe(broker.PUSH, broker.COORDINATOR)
-	if err != nil {
-		return err
-	}
-	pullEvent, err := m.broker.Subscribe(broker.PULL, broker.COORDINATOR)
-	if err != nil {
-		return err
-	}
+	pushEvent := m.broker.Subscribe(broker.ClientMessage, broker.PUSH)
+	pullEvent := m.broker.Subscribe(broker.ClientMessage, broker.PULL)
+
 	for {
 		select {
 		case event := <-pushEvent:
 			push, ok := event.(message.Push)
 			if !ok {
 				log.Println("Failed to cast event to push")
-				continue
+				break
 			}
-			remoteSDP, err := m.AddSender(push.ChannelID, push.UserID, push.SDP)
+			serverSDP, err := m.AddUpstream(push.ChannelID, push.UserID, push.SDP)
 			if err != nil {
-				log.Printf("Failed to add sender: %v", err)
-				continue
+				log.Printf("Failed to add upstream: %v", err)
+				break
 			}
-			if err := m.broker.Send(broker.PUSH, push.UserID+push.ChannelID, remoteSDP); err != nil {
+			if err := m.broker.Publish(broker.ClientSocket, broker.Detail(push.ChannelID+push.UserID), serverSDP); err != nil {
 				log.Printf("Failed to publish to broker: %v", err)
 			}
 		case event := <-pullEvent:
 			pull, ok := event.(message.Pull)
 			if !ok {
 				log.Println("Failed to cast event to pull")
-				continue
+				break
 			}
-			remoteSDP, err := m.AddReceiver(pull.ChannelID, pull.UserID, pull.SDP)
+			serverSDP, err := m.AddDownstream(pull.ChannelID, pull.UserID, pull.SDP)
 			if err != nil {
-				log.Printf("Failed to add receiver: %v", err)
-				continue
+				log.Printf("Failed to add downstream: %v", err)
+				break
 			}
-			if err := m.broker.Send(broker.PULL, pull.UserID+pull.ChannelID, remoteSDP); err != nil {
+			if err := m.broker.Publish(broker.ClientSocket, broker.Detail(pull.ChannelID+pull.UserID), serverSDP); err != nil {
 				log.Printf("Failed to publish to broker: %v", err)
 			}
 		}
 	}
 }
 
-// AddSender creates a new upstream connection and adds it to the channel.
-func (m *Media) AddSender(channelID string, userID string, sdp string) (string, error) {
+// AddUpstream creates a new upstream connection and adds it to the channel.
+func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string, error) {
 	ch := channel.New()
 	conn, err := connection.NewInbound(m.connectionConfig, sdp)
 	if err != nil {
@@ -100,8 +95,8 @@ func (m *Media) AddSender(channelID string, userID string, sdp string) (string, 
 	return conn.ServerSDP(), nil
 }
 
-// AddReceiver creates a new downstream connection and adds it to the channel.
-func (m *Media) AddReceiver(channelID string, userID string, sdp string) (string, error) {
+// AddDownstream creates a new downstream connection and adds it to the channel.
+func (m *Media) AddDownstream(channelID string, userID string, sdp string) (string, error) {
 	ch := m.channels[channelID]
 	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
 	if err != nil {
