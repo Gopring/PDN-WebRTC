@@ -6,13 +6,8 @@ import (
 	"github.com/pion/webrtc/v4"
 	"log"
 	"pdn/broker"
-	"pdn/media/channel"
-	"pdn/media/connection"
 	"pdn/types/message"
 )
-
-// Func receives user's request and returns sdp
-type Func func(channelID string, userID string, sdp string) (string, error)
 
 // Media contains the channels and connection configuration.
 // NOTE(window9u): In future, media package could be detached from pdn
@@ -20,7 +15,7 @@ type Func func(channelID string, userID string, sdp string) (string, error)
 type Media struct {
 	// TODO(window9u): we should add locker for channels.
 	broker           *broker.Broker
-	channels         map[string]*channel.Channel
+	channels         map[string]*Channel
 	connectionConfig webrtc.Configuration
 }
 
@@ -29,7 +24,7 @@ type Media struct {
 func New(b *broker.Broker) *Media {
 	return &Media{
 		broker:   b,
-		channels: map[string]*channel.Channel{},
+		channels: map[string]*Channel{},
 		connectionConfig: webrtc.Configuration{
 			ICEServers: []webrtc.ICEServer{
 				{
@@ -57,7 +52,10 @@ func (m *Media) Run() error {
 				log.Printf("Failed to add upstream: %v", err)
 				break
 			}
-			if err := m.broker.Publish(broker.ClientSocket, broker.Detail(push.ChannelID+push.UserID), serverSDP); err != nil {
+			if err := m.broker.Publish(broker.ClientSocket, broker.Detail(push.ChannelID+push.UserID), message.MediaSDP{
+				Common: message.Common{RequestID: push.RequestID},
+				SDP:    serverSDP,
+			}); err != nil {
 				log.Printf("Failed to publish to broker: %v", err)
 			}
 		case event := <-pullEvent:
@@ -71,7 +69,10 @@ func (m *Media) Run() error {
 				log.Printf("Failed to add downstream: %v", err)
 				break
 			}
-			if err := m.broker.Publish(broker.ClientSocket, broker.Detail(pull.ChannelID+pull.UserID), serverSDP); err != nil {
+			if err := m.broker.Publish(broker.ClientSocket, broker.Detail(pull.ChannelID+pull.UserID), message.MediaSDP{
+				Common: message.Common{RequestID: pull.RequestID},
+				SDP:    serverSDP,
+			}); err != nil {
 				log.Printf("Failed to publish to broker: %v", err)
 			}
 		}
@@ -80,25 +81,25 @@ func (m *Media) Run() error {
 
 // AddUpstream creates a new upstream connection and adds it to the channel.
 func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string, error) {
-	ch := channel.New()
-	conn, err := connection.NewInbound(m.connectionConfig, sdp)
+	ch := NewChannel()
+	conn, err := NewInbound(m.connectionConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to make connection: %w", err)
 	}
 
 	ch.SetUpstream(conn, userID)
-
-	if err = conn.StartICE(); err != nil {
+	if err = StartICE(conn, sdp); err != nil {
 		return "", fmt.Errorf("failed to start ICE: %w", err)
 	}
 	m.channels[channelID] = ch
-	return conn.ServerSDP(), nil
+
+	return conn.LocalDescription().SDP, nil
 }
 
 // AddDownstream creates a new downstream connection and adds it to the channel.
 func (m *Media) AddDownstream(channelID string, userID string, sdp string) (string, error) {
 	ch := m.channels[channelID]
-	conn, err := connection.NewOutbound(m.connectionConfig, sdp)
+	conn, err := NewOutbound(m.connectionConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to make connection: %w", err)
 	}
@@ -107,9 +108,11 @@ func (m *Media) AddDownstream(channelID string, userID string, sdp string) (stri
 		return "", fmt.Errorf("failed to set downstream: %w", err)
 	}
 
-	err = conn.StartICE()
+	if err = StartICE(conn, sdp); err != nil {
+		return "", fmt.Errorf("failed to start ICE: %w", err)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to start ICE: %w", err)
 	}
-	return conn.ServerSDP(), nil
+	return conn.LocalDescription().SDP, nil
 }
