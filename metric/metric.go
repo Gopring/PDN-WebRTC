@@ -77,8 +77,9 @@ func (m *Metrics) RegisterMetrics() {
 // Start initializes and starts the metrics HTTP server.
 func (m *Metrics) Start(stop <-chan struct{}) {
 	m.httpServer = &http.Server{
-		Addr:    fmt.Sprintf(":%d", m.config.Port),
-		Handler: promhttp.Handler(),
+		Addr:              fmt.Sprintf(":%d", m.config.Port),
+		Handler:           promhttp.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go m.UpdateSystemMetrics(stop)
