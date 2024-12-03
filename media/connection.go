@@ -8,8 +8,8 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-// NewInbound creates a new inbound connection.
-func NewInbound(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
+// NewInboundConnection creates a new inbound connection.
+func NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
 		return nil, fmt.Errorf("failed to register default codecs: %w", err)
@@ -45,8 +45,8 @@ func NewInbound(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	return peerConnection, nil
 }
 
-// NewOutbound creates a new outbound connection.
-func NewOutbound(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
+// NewOutboundConnection creates a new outbound connection.
+func NewOutboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	peerConnection, err := webrtc.NewPeerConnection(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
