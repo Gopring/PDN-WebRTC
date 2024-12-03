@@ -179,8 +179,9 @@ func (m *Media) publishStateChange(conn *webrtc.PeerConnection, channelID string
 			log.Printf("Channel %s: Closed", channelID)
 		case webrtc.PeerConnectionStateDisconnected:
 			log.Printf("Channel %s: Disconnected", channelID)
+		case webrtc.PeerConnectionStateFailed:
+			log.Printf("Channel %s: Failed", channelID)
 		default:
-			panic("unhandled default case")
 		}
 	})
 }
