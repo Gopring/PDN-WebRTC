@@ -88,12 +88,7 @@ func (c *Controller) sendResponse(ctx context.Context, conn *websocket.Conn, cha
 		select {
 		case <-ctx.Done():
 			return
-		default:
-			msg := sub.Receive()
-			if msg == nil {
-				return
-			}
-
+		case msg := <-sub.Receive():
 			if err := conn.WriteJSON(msg); err != nil {
 				log.Printf("Failed to send response: %v", err)
 				return

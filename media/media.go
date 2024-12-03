@@ -42,7 +42,7 @@ func (m *Media) Run() {
 
 	for {
 		select {
-		case event := <-pushEvent:
+		case event := <-pushEvent.Receive():
 			push, ok := event.(message.Push)
 			if !ok {
 				log.Println("Failed to cast event to push")
@@ -60,7 +60,7 @@ func (m *Media) Run() {
 			}); err != nil {
 				log.Printf("Failed to publish to broker: %v", err)
 			}
-		case event := <-pullEvent:
+		case event := <-pullEvent.Receive():
 			pull, ok := event.(message.Pull)
 			if !ok {
 				log.Println("Failed to cast event to pull")
@@ -84,7 +84,6 @@ func (m *Media) Run() {
 
 // AddUpstream creates a new upstream connection and adds it to the channel.
 func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string, error) {
-	log.Printf("AddUpstream: %s", channelID)
 	ch := NewChannel()
 	conn, err := NewInbound(m.connectionConfig)
 	if err != nil {
@@ -93,21 +92,11 @@ func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("ICE Connection State has changed: %s\n", state.String())
 		if state == webrtc.PeerConnectionStateConnected {
-			//if err := m.broker.Publish(broker.Media, broker.PUSH, message.Connected{
-			//	ChannelID: channelID,
-			//	UserID:    userID,
-			//}); err != nil {
-			//	log.Printf("Failed to publish to broker: %v", err)
-			//}
+			// TODO(window9u): we should publish this event to broker.
 			log.Printf("Connected: %s", channelID)
 		} else if state == webrtc.PeerConnectionStateClosed {
-			//if err := m.broker.Publish(broker.Media, broker.PUSH, message.Disconnected{
-			//	ChannelID: channelID,
-			//	UserID:    userID,
-			//}); err != nil {
-			//	log.Printf("Failed to publish to broker: %v", err)
-			//}
-			log.Printf("Disconnected: %s", channelID)
+			// TODO(window9u): we should publish this event to broker.
+			log.Printf("Closed: %s", channelID)
 		} else if state == webrtc.PeerConnectionStateDisconnected {
 			log.Printf("Disconnected: %s", channelID)
 		}
@@ -124,7 +113,6 @@ func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string
 
 // AddDownstream creates a new downstream connection and adds it to the channel.
 func (m *Media) AddDownstream(channelID string, sdp string) (string, error) {
-	log.Printf("AddDownstream: %s", channelID)
 	ch := m.channels[channelID]
 	conn, err := NewOutbound(m.connectionConfig)
 	if err != nil {
@@ -134,21 +122,11 @@ func (m *Media) AddDownstream(channelID string, sdp string) (string, error) {
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("ICE Connection State has changed: %s\n", state.String())
 		if state == webrtc.PeerConnectionStateConnected {
-			//if err := m.broker.Publish(broker.Media, broker.PUSH, message.Connected{
-			//	ChannelID: channelID,
-			//	UserID:    userID,
-			//}); err != nil {
-			//	log.Printf("Failed to publish to broker: %v", err)
-			//}
+			// TODO(window9u): we should publish this event to broker.
 			log.Printf("Connected: %s", channelID)
 		} else if state == webrtc.PeerConnectionStateClosed {
-			//if err := m.broker.Publish(broker.Media, broker.PUSH, message.Disconnected{
-			//	ChannelID: channelID,
-			//	UserID:    userID,
-			//}); err != nil {
-			//	log.Printf("Failed to publish to broker: %v", err)
-			//}
-			log.Printf("Disconnected: %s", channelID)
+			// TODO(window9u): we should publish this event to broker.
+			log.Printf("Closed: %s", channelID)
 		} else if state == webrtc.PeerConnectionStateDisconnected {
 			log.Printf("Disconnected: %s", channelID)
 		}
@@ -161,8 +139,6 @@ func (m *Media) AddDownstream(channelID string, sdp string) (string, error) {
 	if err = StartICE(conn, sdp); err != nil {
 		return "", fmt.Errorf("failed to start ICE: %w", err)
 	}
-	if err != nil {
-		return "", fmt.Errorf("failed to start ICE: %w", err)
-	}
+
 	return conn.LocalDescription().SDP, nil
 }

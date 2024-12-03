@@ -14,12 +14,8 @@ func (s *Subscription) Send(message any) {
 	s.queue <- message
 }
 
-func (s *Subscription) Receive() any {
-	msg, ok := <-s.queue
-	if !ok {
-		return nil
-	}
-	return msg
+func (s *Subscription) Receive() <-chan any {
+	return s.queue
 }
 
 func (s *Subscription) Close() {
