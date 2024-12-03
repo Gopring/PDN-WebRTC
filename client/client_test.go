@@ -5,12 +5,13 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/stretchr/testify/assert"
 	"log"
+	"pdn/metric"
 	"pdn/signal"
 	"testing"
 )
 
 // NewTestConfig creates a new signal.Config for testing.
-func NewTestConfig() signal.Config {
+func NewTestSignalConfig() signal.Config {
 	return signal.Config{
 		Port:     8080,
 		CertFile: "",
@@ -19,9 +20,20 @@ func NewTestConfig() signal.Config {
 	}
 }
 
+// NewTestMetricConfig creates a new metric.Config for testing.
+func NewTestMetricConfig() metric.Config {
+	return metric.Config{
+		Port: 9090,
+		Path: "/metrics",
+	}
+}
+
 // StartTestSignal starts a signal server for testing.
 func StartTestSignal() {
-	s := signal.New(NewTestConfig())
+	signalConfig := NewTestSignalConfig()
+	metricConfig := NewTestMetricConfig()
+	s := signal.New(signalConfig, metricConfig)
+
 	_ = s.Start()
 }
 
