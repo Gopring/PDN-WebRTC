@@ -35,7 +35,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func(conn *websocket.Conn) {
 		err := conn.Close()
 		if err != nil {
-			log.Println("Failed to close connection")
+			log.Println("Error occurs in closing connection")
 			return
 		}
 	}(conn)

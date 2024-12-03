@@ -3,134 +3,100 @@ package broker
 import (
 	"fmt"
 	"sync"
-)
 
-const (
-	ClientSocket = iota
-	ClientMessage
-	Media
-)
-
-const (
-	PUSH = "PUSH"
-	PULL = "PULL"
+	"pdn/broker/channel"
+	"pdn/broker/subscription"
 )
 
 type Topic int
 type Detail string
 
-type Broker struct {
-	mu     sync.RWMutex
-	queues map[Topic]map[Detail]*subscriptions
-}
+const (
+	ClientSocket Topic = iota
+	ClientMessage
+	Media
+)
 
-type subscriptions struct {
-	mu            sync.RWMutex
-	subscriptions []chan any
+const (
+	PUSH Detail = "PUSH"
+	PULL Detail = "PULL"
+)
+
+type Broker struct {
+	mu       sync.RWMutex
+	channels map[Topic]map[Detail]*channel.Channel
 }
 
 // New creates a new broker instance.
 func New() *Broker {
 	return &Broker{
-		queues: make(map[Topic]map[Detail]*subscriptions),
+		channels: make(map[Topic]map[Detail]*channel.Channel),
 	}
 }
 
-// Publish publishes a message to all subscribers for a given topic and detail.
+// Publish sends a message to all subscribers for a given topic and detail.
 func (b *Broker) Publish(topic Topic, detail Detail, message any) error {
-	subs, err := b.getSubscriptions(topic, detail)
+	ch, err := b.getChannel(topic, detail)
 	if err != nil {
 		return err
 	}
 
-	subs.sendAll(message)
+	ch.SendAll(message)
 	return nil
 }
 
-// Subscribe creates a subscription for a given topic and detail and returns a channel.
-func (b *Broker) Subscribe(topic Topic, detail Detail) <-chan any {
-	if _, exists := b.queues[topic]; !exists {
-		b.queues[topic] = make(map[Detail]*subscriptions)
-	}
-	if _, exists := b.queues[topic][detail]; !exists {
-		b.queues[topic][detail] = &subscriptions{}
-	}
+// Subscribe creates a subscription for a given topic and detail.
+func (b *Broker) Subscribe(topic Topic, detail Detail) *subscription.Subscription {
+	b.ensureChannel(topic, detail)
 
-	subscription := make(chan any, 1)
-	b.queues[topic][detail].addSubscription(subscription)
-	return subscription
+	sub := subscription.New()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	b.channels[topic][detail].AddSubscription(sub)
+	return sub
 }
 
 // Unsubscribe removes a subscription for a given topic and detail.
-func (b *Broker) Unsubscribe(topic Topic, detail Detail, ch chan any) error {
-	subs, err := b.getSubscriptions(topic, detail)
+func (b *Broker) Unsubscribe(topic Topic, detail Detail, sub *subscription.Subscription) error {
+	ch, err := b.getChannel(topic, detail)
 	if err != nil {
 		return err
 	}
 
-	subs.removeSubscription(ch)
+	ch.RemoveSubscription(sub)
 	return nil
 }
 
-// getSubscriptions safely retrieves subscriptions for a given topic and detail.
-func (b *Broker) getSubscriptions(topic Topic, detail Detail) (*subscriptions, error) {
+// ensureChannel initializes the channel for a given topic and detail if it doesn't exist.
+func (b *Broker) ensureChannel(topic Topic, detail Detail) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if _, exists := b.channels[topic]; !exists {
+		b.channels[topic] = make(map[Detail]*channel.Channel)
+	}
+	if _, exists := b.channels[topic][detail]; !exists {
+		b.channels[topic][detail] = channel.New()
+	}
+}
+
+// getChannel safely retrieves the channel for a given topic and detail.
+func (b *Broker) getChannel(topic Topic, detail Detail) (*channel.Channel, error) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	if details, exists := b.queues[topic]; exists {
-		if subs, exists := details[detail]; exists {
-			return subs, nil
+	if details, exists := b.channels[topic]; exists {
+		if ch, exists := details[detail]; exists {
+			return ch, nil
 		}
 	}
-	return nil, fmt.Errorf("topic %s, detail %s do not exist", getTopicString(topic), detail)
+	return nil, fmt.Errorf("channel does not exist for topic %s and detail %s", topic.String(), detail)
 }
 
-// subscriptionExists checks if a subscription exists for the given topic and detail.
-func (b *Broker) subscriptionExists(topic Topic, detail Detail) bool {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	_, exists := b.queues[topic][detail]
-	return exists
-}
-
-// sendAll sends a message to all subscriptions.
-func (s *subscriptions) sendAll(message any) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for _, ch := range s.subscriptions {
-		// Send message in a non-blocking manner
-		go func(ch chan any) {
-			ch <- message
-		}(ch)
-	}
-}
-
-// addSubscription adds a new subscription channel.
-func (s *subscriptions) addSubscription(ch chan any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.subscriptions = append(s.subscriptions, ch)
-}
-
-// removeSubscription removes a subscription channel.
-func (s *subscriptions) removeSubscription(ch chan any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for i, sub := range s.subscriptions {
-		if sub == ch {
-			s.subscriptions = append(s.subscriptions[:i], s.subscriptions[i+1:]...)
-			close(ch)
-			return
-		}
-	}
-}
-
-func getTopicString(topic Topic) string {
-	switch topic {
+// String returns the string representation of the Topic.
+func (t Topic) String() string {
+	switch t {
 	case ClientSocket:
 		return "ClientSocket"
 	case ClientMessage:
