@@ -3,7 +3,6 @@ package request
 
 // Activate is data type for activating user
 type Activate struct {
-	RequestID int    `json:"request_id"`
 	ChannelID string `json:"channel_id"`
 	UserID    string `json:"user_id"`
 }

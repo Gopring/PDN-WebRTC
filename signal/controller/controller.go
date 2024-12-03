@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	PUSH = "PUSH"
-	PULL = "PULL"
+	ACTIVATE = "ACTIVATE"
+	PUSH     = "PUSH"
+	PULL     = "PULL"
 )
 
 // Controller handles HTTP requests.
@@ -35,7 +36,6 @@ func (c *Controller) Process(socket *websocket.Conn) error {
 	if err != nil {
 		return err
 	}
-
 	// 02. subscribe itself
 	go c.sendResponse(socket, channelID, userID)
 
@@ -47,9 +47,15 @@ func (c *Controller) Process(socket *websocket.Conn) error {
 }
 
 func (c *Controller) authenticate(s *websocket.Conn) (string, string, error) {
-	var req request.Activate
-
+	var req request.Common
 	if err := s.ReadJSON(&req); err != nil {
+		return "", "", err
+	}
+	if req.Type != ACTIVATE {
+		return "", "", fmt.Errorf("invalid type: %s", req.Type)
+	}
+	var payload request.Activate
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		return "", "", err
 	}
 
@@ -61,13 +67,13 @@ func (c *Controller) authenticate(s *websocket.Conn) (string, string, error) {
 		return "", "", err
 	}
 
-	return req.ChannelID, req.UserID, nil
+	return payload.ChannelID, payload.UserID, nil
 }
 
 func (c *Controller) receiveRequest(s *websocket.Conn, channelID, userID string) error {
 	for {
 		var req request.Common
-		if err := s.ReadJSON(req); err != nil {
+		if err := s.ReadJSON(&req); err != nil {
 			return err
 		}
 		switch req.Type {
@@ -82,7 +88,7 @@ func (c *Controller) receiveRequest(s *websocket.Conn, channelID, userID string)
 				UserID:    userID,
 				SDP:       payload.SDP,
 			}); err != nil {
-				return err
+				return fmt.Errorf("failed to publish message in controller: %v", err)
 			}
 		case PULL:
 			var payload request.Pull
@@ -95,7 +101,7 @@ func (c *Controller) receiveRequest(s *websocket.Conn, channelID, userID string)
 				UserID:    userID,
 				SDP:       payload.SDP,
 			}); err != nil {
-				return err
+				return fmt.Errorf("failed to publish message in controller: %v", err)
 			}
 		default:
 			return fmt.Errorf("invalid type: %s", req.Type)

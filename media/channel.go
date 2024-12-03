@@ -33,7 +33,6 @@ func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
 		for {
 			i, _, readErr := remoteTrack.Read(rtpBuf)
 			if readErr != nil {
-				// TODO(window9u): we should handle this panic properly.
 				log.Println(newTrackErr)
 				return
 			}
@@ -46,7 +45,7 @@ func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
 }
 
 // SetDownstream sets the downstream connection.
-func (c *Channel) SetDownstream(conn *webrtc.PeerConnection, _ string) error {
+func (c *Channel) SetDownstream(conn *webrtc.PeerConnection) error {
 	if c.upstream == nil {
 		return errors.New("upstream not exists")
 	}

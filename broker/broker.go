@@ -1,7 +1,7 @@
 package broker
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -82,7 +82,7 @@ func (b *Broker) getSubscriptions(topic Topic, detail Detail) (*subscriptions, e
 			return subs, nil
 		}
 	}
-	return nil, errors.New("subscriptions do not exist")
+	return nil, fmt.Errorf("topic %s, detail %s do not exist", getTopicString(topic), detail)
 }
 
 // subscriptionExists checks if a subscription exists for the given topic and detail.
@@ -126,5 +126,18 @@ func (s *subscriptions) removeSubscription(ch chan any) {
 			close(ch)
 			return
 		}
+	}
+}
+
+func getTopicString(topic Topic) string {
+	switch topic {
+	case ClientSocket:
+		return "ClientSocket"
+	case ClientMessage:
+		return "ClientMessage"
+	case Media:
+		return "Media"
+	default:
+		return "Unknown"
 	}
 }
