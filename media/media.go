@@ -22,6 +22,7 @@ type Media struct {
 	connectionConfig webrtc.Configuration
 }
 
+// Default WebRTC configuration.
 var defaultWebrtcConfig = webrtc.Configuration{
 	ICEServers: []webrtc.ICEServer{
 		{
@@ -40,6 +41,7 @@ func New(b *broker.Broker) *Media {
 	}
 }
 
+// Run starts the Media instance.
 func (m *Media) Run() {
 	pushEvent := m.broker.Subscribe(broker.ClientMessage, broker.PUSH)
 	pullEvent := m.broker.Subscribe(broker.ClientMessage, broker.PULL)
@@ -58,6 +60,7 @@ func (m *Media) Run() {
 	}
 }
 
+// handlePush handles a push event.
 func (m *Media) handlePush(event any) error {
 	push, ok := event.(message.Push)
 	if !ok {
@@ -77,6 +80,7 @@ func (m *Media) handlePush(event any) error {
 	return nil
 }
 
+// handlePull handles a pull event.
 func (m *Media) handlePull(event any) error {
 	pull, ok := event.(message.Pull)
 	if !ok {
@@ -144,12 +148,14 @@ func (m *Media) AddDownstream(channelID, sdp string) (string, error) {
 	return conn.LocalDescription().SDP, nil
 }
 
+// addChannel adds a channel to the media.
 func (m *Media) addChannel(channelID string, ch *Channel) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.channels[channelID] = ch
 }
 
+// ChannelExists checks if a channel exists.
 func (m *Media) channelExists(channelID string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -157,6 +163,7 @@ func (m *Media) channelExists(channelID string) bool {
 	return ok
 }
 
+// getChannel returns a channel by ID.
 func (m *Media) getChannel(channelID string) (*Channel, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -167,6 +174,7 @@ func (m *Media) getChannel(channelID string) (*Channel, error) {
 	return ch, nil
 }
 
+// publishStateChange publishes the state change of a connection.
 func (m *Media) publishStateChange(conn *webrtc.PeerConnection, channelID string) {
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		log.Printf("Channel %s: ICE Connection State has changed to %s", channelID, state.String())
