@@ -1,18 +1,19 @@
-// Package media contains managing channels and connections using WebRTC.
+// Package media manages channels and connections using WebRTC.
 package media
 
 import (
 	"fmt"
-	"github.com/pion/webrtc/v4"
 	"log"
+	"sync"
+
+	"github.com/pion/webrtc/v4"
 	"pdn/broker"
 	"pdn/types/client/response"
 	"pdn/types/message"
-	"sync"
 )
 
-// Media contains the channels and connection configuration.
-// NOTE(window9u): In future, media package could be detached from pdn
+// Media manages channels and connection configurations.
+// NOTE: In the future, the media package could be detached from pdn
 // and be used as a standalone package.
 type Media struct {
 	mu               sync.RWMutex
@@ -30,11 +31,11 @@ var defaultWebrtcConfig = webrtc.Configuration{
 }
 
 // New creates a new Media instance.
-// TODO(window9u): we should add more configuration options.
+// TODO: Add more configuration options.
 func New(b *broker.Broker) *Media {
 	return &Media{
 		broker:           b,
-		channels:         map[string]*Channel{},
+		channels:         make(map[string]*Channel),
 		connectionConfig: defaultWebrtcConfig,
 	}
 }
@@ -60,18 +61,18 @@ func (m *Media) Run() {
 func (m *Media) handlePush(event any) error {
 	push, ok := event.(message.Push)
 	if !ok {
-		return fmt.Errorf("failed to cast event to push %v", event)
+		return fmt.Errorf("failed to cast event to Push: %v", event)
 	}
 	serverSDP, err := m.AddUpstream(push.ChannelID, push.UserID, push.SDP)
 	if err != nil {
-		return fmt.Errorf("failed to add upstream: %v", err)
+		return fmt.Errorf("failed to add upstream: %w", err)
 	}
 	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(push.ChannelID+push.UserID), response.Push{
 		RequestID:  push.RequestID,
 		StatusCode: 200,
 		SDP:        serverSDP,
 	}); err != nil {
-		return fmt.Errorf("failed to publish push response: %v", err)
+		return fmt.Errorf("failed to publish push response: %w", err)
 	}
 	return nil
 }
@@ -79,34 +80,36 @@ func (m *Media) handlePush(event any) error {
 func (m *Media) handlePull(event any) error {
 	pull, ok := event.(message.Pull)
 	if !ok {
-		return fmt.Errorf("failed to cast event to pull %v", event)
+		return fmt.Errorf("failed to cast event to Pull: %v", event)
 	}
 	serverSDP, err := m.AddDownstream(pull.ChannelID, pull.SDP)
 	if err != nil {
-		return fmt.Errorf("failed to add downstream: %v", err)
+		return fmt.Errorf("failed to add downstream: %w", err)
 	}
 	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(pull.ChannelID+pull.UserID), response.Pull{
 		RequestID:  pull.RequestID,
 		StatusCode: 200,
 		SDP:        serverSDP,
 	}); err != nil {
-		return fmt.Errorf("failed to publish pull response: %v", err)
+		return fmt.Errorf("failed to publish pull response: %w", err)
 	}
 	return nil
 }
 
 // AddUpstream creates a new upstream connection and adds it to the channel.
-func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string, error) {
+func (m *Media) AddUpstream(channelID, userID, sdp string) (string, error) {
 	if m.channelExists(channelID) {
 		return "", fmt.Errorf("channel already exists: %s", channelID)
 	}
 
 	ch := NewChannel()
+	m.addChannel(channelID, ch)
+
 	conn, err := NewInboundConnection(m.connectionConfig)
 	if err != nil {
-		return "", fmt.Errorf("failed to make connection: %w", err)
+		return "", fmt.Errorf("failed to create inbound connection: %w", err)
 	}
-	m.PublishStateChange(conn, channelID)
+	m.publishStateChange(conn, channelID)
 
 	ch.SetUpstream(conn, userID)
 	if err = StartICE(conn, sdp); err != nil {
@@ -117,14 +120,18 @@ func (m *Media) AddUpstream(channelID string, userID string, sdp string) (string
 }
 
 // AddDownstream creates a new downstream connection and adds it to the channel.
-func (m *Media) AddDownstream(channelID string, sdp string) (string, error) {
-	ch := m.channels[channelID]
-	conn, err := NewOutboundConnection(m.connectionConfig)
+func (m *Media) AddDownstream(channelID, sdp string) (string, error) {
+	ch, err := m.getChannel(channelID)
 	if err != nil {
-		return "", fmt.Errorf("failed to make connection: %w", err)
+		return "", err
 	}
 
-	m.PublishStateChange(conn, channelID)
+	conn, err := NewOutboundConnection(m.connectionConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to create outbound connection: %w", err)
+	}
+
+	m.publishStateChange(conn, channelID)
 
 	if err = ch.SetDownstream(conn); err != nil {
 		return "", fmt.Errorf("failed to set downstream: %w", err)
@@ -150,17 +157,30 @@ func (m *Media) channelExists(channelID string) bool {
 	return ok
 }
 
-func (m *Media) PublishStateChange(conn *webrtc.PeerConnection, channelID string) {
+func (m *Media) getChannel(channelID string) (*Channel, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ch, ok := m.channels[channelID]
+	if !ok {
+		return nil, fmt.Errorf("channel does not exist: %s", channelID)
+	}
+	return ch, nil
+}
+
+func (m *Media) publishStateChange(conn *webrtc.PeerConnection, channelID string) {
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("ICE Connection State has changed: %s\n", state.String())
-		if state == webrtc.PeerConnectionStateConnected {
-			// TODO(window9u): we should publish this event to broker.
-			log.Printf("Connected: %s", channelID)
-		} else if state == webrtc.PeerConnectionStateClosed {
-			// TODO(window9u): we should publish this event to broker.
-			log.Printf("Closed: %s", channelID)
-		} else if state == webrtc.PeerConnectionStateDisconnected {
-			log.Printf("Disconnected: %s", channelID)
+		log.Printf("Channel %s: ICE Connection State has changed to %s", channelID, state.String())
+		switch state {
+		case webrtc.PeerConnectionStateConnected:
+			// TODO: Publish this event to the broker.
+			log.Printf("Channel %s: Connected", channelID)
+		case webrtc.PeerConnectionStateClosed:
+			// TODO: Publish this event to the broker.
+			log.Printf("Channel %s: Closed", channelID)
+		case webrtc.PeerConnectionStateDisconnected:
+			log.Printf("Channel %s: Disconnected", channelID)
+		default:
+			panic("unhandled default case")
 		}
 	})
 }
