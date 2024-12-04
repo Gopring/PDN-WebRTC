@@ -2,141 +2,159 @@
 package controller
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"log"
-	"pdn/pkg/socket"
-	"pdn/signal/coordinator"
-	"pdn/types/api/request"
-	"pdn/types/api/response"
+	"pdn/broker"
+	"pdn/types/client/request"
+	"pdn/types/client/response"
+	"pdn/types/message"
 )
 
-// Request types for signaling in the socket communication.
 const (
-	PUSH      = "PUSH"
-	PULL      = "PULL"
-	FORWARD   = "FORWARD"
-	FETCH     = "FETCH"
-	ARRANGE   = "ARRANGE"
-	RECONNECT = "RECONNECT"
+	activate = "ACTIVATE"
+	push     = "PUSH"
+	pull     = "PULL"
 )
 
-// SocketController handles HTTP requests.
-type SocketController struct {
-	coordinator coordinator.Coordinator
-	debug       bool
-	handlers    map[string]func(string, string, string) (string, error)
+// Controller handles HTTP requests.
+type Controller struct {
+	broker *broker.Broker
 }
 
-// New creates a new instance of SocketController.
-func New(c coordinator.Coordinator, isDebug bool) *SocketController {
-	return &SocketController{
-		coordinator: c,
-		debug:       isDebug,
-		handlers: map[string]func(string, string, string) (string, error){
-			PUSH:      c.Push,
-			PULL:      c.Pull,
-			FORWARD:   c.Forward,
-			FETCH:     c.Fetch,
-			ARRANGE:   c.Arrange,
-			RECONNECT: c.Reconnect,
-		},
+// New creates a new instance of Controller.
+func New(b *broker.Broker) *Controller {
+	return &Controller{
+		broker: b,
 	}
 }
 
 // Process handles HTTP requests.
-func (c *SocketController) Process(s socket.Socket) error {
-	channelID, userID, err := c.activate(s)
+func (c *Controller) Process(conn *websocket.Conn) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	channelID, userID, err := c.authenticate(conn)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to authenticate: %w", err)
 	}
+	// 02. subscribe itself
+	go c.sendResponse(ctx, conn, channelID, userID)
 
-	log.Printf("Connection established (ChannelID: %s, UserID: %s)", channelID, userID)
-	if err := c.handleConnection(s, channelID, userID); err != nil {
-		return fmt.Errorf("connection handling error (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
+	// 03. sendResponse message to broker
+	if err := c.receiveRequest(conn, channelID, userID); err != nil {
+		return fmt.Errorf("failed to receive request: %w", err)
 	}
-
-	if err := c.coordinator.Remove(channelID, userID); err != nil {
-		log.Printf("Failed to remove coordinator (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
-	}
-
 	return nil
 }
 
-func (c *SocketController) activate(s socket.Socket) (string, string, error) {
-	var req request.Activate
-
-	if err := s.Read(&req); err != nil {
-		log.Printf("Failed to read activation request: %v", err)
-		return "", "", err
+func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) {
+	var req request.Common
+	if err := conn.ReadJSON(&req); err != nil {
+		return "", "", fmt.Errorf("failed to read authentication message: %w", err)
+	}
+	if req.Type != activate {
+		return "", "", fmt.Errorf("expected type '%s', got '%s'", activate, req.Type)
+	}
+	var payload request.Activate
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return "", "", fmt.Errorf("failed to unmarshal activation payload: %w", err)
 	}
 
-	if err := c.coordinator.Activate(req.ChannelID, req.UserID, s); err != nil {
-		res := response.Activate{
-			RequestID:  req.RequestID,
-			StatusCode: 400,
-			Message:    err.Error(),
-		}
-		if writeErr := s.WriteJSON(res); writeErr != nil {
-			log.Printf("Failed to write res: %v", writeErr)
-			return "", "", writeErr
-		}
-		log.Printf("Failed to activate coordinator (ChannelID: %s, UserID: %s): %v", req.ChannelID, req.UserID, err)
-		return "", "", err
-	}
-
-	if err := s.WriteJSON(response.Activate{
+	res := response.Activate{
 		RequestID:  req.RequestID,
 		StatusCode: 200,
 		Message:    "Connection established",
-	}); err != nil {
-		log.Printf("Failed to write response: %v", err)
-		return "", "", err
 	}
 
-	return req.ChannelID, req.UserID, nil
+	if err := conn.WriteJSON(res); err != nil {
+		return "", "", fmt.Errorf("failed to send activation response: %w", err)
+	}
+
+	return payload.ChannelID, payload.UserID, nil
 }
 
-// handleConnection processes incoming signals in a loop.
-func (c *SocketController) handleConnection(s socket.Socket, channelID, userID string) error {
+func (c *Controller) sendResponse(ctx context.Context, conn *websocket.Conn, channelID, userID string) {
+	detail := broker.Detail(channelID + userID)
+	sub := c.broker.Subscribe(broker.ClientSocket, detail)
+	defer func() {
+		if err := c.broker.Unsubscribe(broker.ClientSocket, detail, sub); err != nil {
+			log.Printf("Error occurs in unsubscribe: %v", err)
+		}
+	}()
+
 	for {
-		var sig request.Signal
-		if err := s.Read(&sig); err != nil {
-			return fmt.Errorf("failed to read signal: %w", err)
-		}
-		res, err := c.route(sig, channelID, userID)
-		if err != nil {
-			log.Printf("Error routing signal (ChannelID: %s, UserID: %s): %v", channelID, userID, err)
-		}
-		if err := s.WriteJSON(res); err != nil {
-			return fmt.Errorf("failed to write response: %w", err)
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-sub.Receive():
+			if err := conn.WriteJSON(msg); err != nil {
+				log.Printf("Failed to send response: %v", err)
+				return
+			}
 		}
 	}
 }
 
-// route directs a parsed request based on its type.
-func (c *SocketController) route(signal request.Signal, channelID, userID string) (response.Signal, error) {
-	log.Printf("Signal received (Type: %s, ChannelID: %s, UserID: %s)", signal.Type, channelID, userID)
+func (c *Controller) receiveRequest(conn *websocket.Conn, channelID, userID string) error {
+	for {
+		var req request.Common
+		if err := conn.ReadJSON(&req); err != nil {
+			return fmt.Errorf("failed to parse common message: %v", err)
+		}
+		if err := c.handleRequest(req, channelID, userID); err != nil {
+			log.Printf("Error handling request: %v", err)
+			continue
+		}
+	}
+}
 
-	handler, exists := c.handlers[signal.Type]
-	res := response.Signal{
-		RequestID: signal.RequestID,
+func (c *Controller) handleRequest(req request.Common, channelID, userID string) error {
+	var err error
+	switch req.Type {
+	case push:
+		err = c.handlePush(req, channelID, userID)
+	case pull:
+		err = c.handlePull(req, channelID, userID)
+	default:
+		err = fmt.Errorf("invalid request type: %s", req.Type)
+	}
+	return err
+}
+
+func (c *Controller) handlePush(req request.Common, channelID, userID string) error {
+	var payload request.Push
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal push payload: %w", err)
 	}
 
-	if !exists {
-		err := fmt.Errorf("unknown request type: %s", signal.Type)
-		res.StatusCode = 400
-		res.SDP = err.Error()
-		return res, err
+	msg := message.Push{
+		Common:    message.Common{RequestID: req.RequestID},
+		ChannelID: channelID,
+		UserID:    userID,
+		SDP:       payload.SDP,
+	}
+	if err := c.broker.Publish(broker.ClientMessage, broker.PUSH, msg); err != nil {
+		return fmt.Errorf("failed to publish push message: %w", err)
+	}
+	return nil
+}
+
+func (c *Controller) handlePull(req request.Common, channelID, userID string) error {
+	var payload request.Pull
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal pull payload: %w", err)
 	}
 
-	sdp, err := handler(channelID, userID, signal.SDP)
-	if err != nil {
-		res.StatusCode = 400
-		res.SDP = err.Error()
-		return res, err
+	msg := message.Pull{
+		Common:    message.Common{RequestID: req.RequestID},
+		ChannelID: channelID,
+		UserID:    userID,
+		SDP:       payload.SDP,
 	}
-
-	res.StatusCode = 200
-	res.SDP = sdp
-	return res, nil
+	if err := c.broker.Publish(broker.ClientMessage, broker.PULL, msg); err != nil {
+		return fmt.Errorf("failed to publish pull message: %w", err)
+	}
+	return nil
 }

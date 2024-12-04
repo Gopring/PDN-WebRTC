@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"pdn/broker"
 	"pdn/media"
 	"pdn/signal/controller"
-	"pdn/signal/coordinator"
-	"pdn/signal/middleware"
+	"pdn/signal/handler"
 	"time"
 )
 
@@ -20,21 +20,14 @@ type Signal struct {
 
 // New creates a new instance of Signal.
 func New(config Config) *Signal {
-
-	med := media.New()
-	cod := coordinator.New(med)
-	con := controller.New(cod, config.Debug)
-	mds := []middleware.Interceptor{
-		middleware.NewAuth(),
-		middleware.NewLogger(),
-		middleware.NewSocket(con),
-	}
-	mux := middleware.Set(http.NewServeMux(), mds...)
-
+	brk := broker.New()
+	con := controller.New(brk)
+	med := media.New(brk)
+	go med.Run()
 	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", config.Port),
 		ReadTimeout: 2 * time.Second,
-		Handler:     mux,
+		Handler:     handler.New(con),
 	}
 	return &Signal{
 		server: srv,

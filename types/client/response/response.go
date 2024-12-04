@@ -8,16 +8,16 @@ type Activate struct {
 	Message    string `json:"message"`
 }
 
-// Signal is data type for signaling
-type Signal struct {
+// Push is data type for response to push
+type Push struct {
 	RequestID  int    `json:"request_id"`
 	StatusCode int    `json:"status_code"`
 	SDP        string `json:"sdp"`
 }
 
-// Arrange is data type for arranging
-type Arrange struct {
-	Type       string `json:"type"`
+// Pull is data type for response to pull
+type Pull struct {
+	RequestID  int    `json:"request_id"`
 	StatusCode int    `json:"status_code"`
 	SDP        string `json:"sdp"`
 }
