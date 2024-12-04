@@ -19,12 +19,15 @@ func Run() {
 	}
 
 	// Setup metrics configuration
-	metricsConfig := metric.Config{
+	metrics := metric.New(metric.Config{
 		Port: metric.DefaultMetricsPort,
 		Path: metric.DefaultMetricsPath,
-	}
+	})
+	metrics.RegisterMetrics()
+	stop := make(chan struct{})
+	go metrics.Start(stop)
 
-	s := signal.New(config, metricsConfig)
+	s := signal.New(config, metrics)
 	if err = s.Start(); err != nil {
 		os.Exit(1)
 	}
