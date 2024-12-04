@@ -4,6 +4,7 @@ package media
 import (
 	"fmt"
 	"log"
+	"pdn/metric"
 	"sync"
 
 	"github.com/pion/webrtc/v4"
@@ -20,6 +21,7 @@ type Media struct {
 	broker           *broker.Broker
 	channels         map[string]*Channel
 	connectionConfig webrtc.Configuration
+	metrics          *metric.Metrics
 }
 
 // Default WebRTC configuration.
@@ -33,11 +35,12 @@ var defaultWebrtcConfig = webrtc.Configuration{
 
 // New creates a new Media instance.
 // TODO: Add more configuration options.
-func New(b *broker.Broker) *Media {
+func New(b *broker.Broker, m *metric.Metrics) *Media {
 	return &Media{
 		broker:           b,
 		channels:         make(map[string]*Channel),
 		connectionConfig: defaultWebrtcConfig,
+		metrics:          m,
 	}
 }
 
@@ -180,9 +183,11 @@ func (m *Media) publishStateChange(conn *webrtc.PeerConnection, channelID string
 		log.Printf("Channel %s: ICE Connection State has changed to %s", channelID, state.String())
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
+			m.metrics.IncrementWebRTCConnections()
 			// TODO: Publish this event to the broker.
 			log.Printf("Channel %s: Connected", channelID)
 		case webrtc.PeerConnectionStateClosed:
+			m.metrics.DecrementWebRTCConnections()
 			// TODO: Publish this event to the broker.
 			log.Printf("Channel %s: Closed", channelID)
 		case webrtc.PeerConnectionStateDisconnected:
