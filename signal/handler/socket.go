@@ -36,7 +36,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.metrics.DecrementWebSocketConnections()
+	h.metrics.IncrementWebSocketConnections()
 	defer func(conn *websocket.Conn) {
 		h.metrics.DecrementWebSocketConnections()
 		err := conn.Close()
