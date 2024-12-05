@@ -5,21 +5,18 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
-	"pdn/metric"
 	"pdn/signal/controller"
 )
 
 // Handler wraps the gorilla/websocket connection.
 type Handler struct {
 	controller *controller.Controller
-	metrics    *metric.Metrics
 }
 
 // New creates a new SocketHandler connection by upgrading the HTTP request.
-func New(c *controller.Controller, m *metric.Metrics) *Handler {
+func New(c *controller.Controller) *Handler {
 	return &Handler{
 		controller: c,
-		metrics:    m,
 	}
 }
 
@@ -36,9 +33,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.metrics.IncrementWebSocketConnections()
 	defer func(conn *websocket.Conn) {
-		h.metrics.DecrementWebSocketConnections()
 		err := conn.Close()
 		if err != nil {
 			log.Println("Error occurs in closing connection")

@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"pdn/broker"
-	"pdn/metric"
 	"pdn/types/client/request"
 	"pdn/types/client/response"
 	"pdn/types/message"
@@ -22,31 +21,26 @@ const (
 
 // Controller handles HTTP requests.
 type Controller struct {
-	broker  *broker.Broker
-	metrics *metric.Metrics
+	broker *broker.Broker
 }
 
 // New creates a new instance of Controller.
-func New(b *broker.Broker, m *metric.Metrics) *Controller {
+func New(b *broker.Broker) *Controller {
 	return &Controller{
-		broker:  b,
-		metrics: m,
+		broker: b,
 	}
 }
 
 // Process handles HTTP requests.
 func (c *Controller) Process(conn *websocket.Conn) error {
-	c.metrics.IncrementClientConnectionAttempts()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	channelID, userID, err := c.authenticate(conn)
 	if err != nil {
-		c.metrics.IncrementClientConnectionFailures()
 
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
-	c.metrics.IncrementClientConnectionSuccesses()
 
 	go c.sendResponse(ctx, conn, channelID, userID)
 

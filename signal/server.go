@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"pdn/broker"
 	"pdn/media"
-	"pdn/metric"
 	"pdn/signal/controller"
 	"pdn/signal/handler"
 	"time"
@@ -15,26 +14,24 @@ import (
 
 // Signal contains the server and configuration.
 type Signal struct {
-	server  *http.Server
-	conf    Config
-	metrics *metric.Metrics
+	server *http.Server
+	conf   Config
 }
 
 // New creates a new instance of Signal.
-func New(config Config, metrics *metric.Metrics) *Signal {
+func New(config Config) *Signal {
 	brk := broker.New()
-	con := controller.New(brk, metrics)
-	med := media.New(brk, metrics)
+	con := controller.New(brk)
+	med := media.New(brk)
 	go med.Run()
 	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", config.Port),
 		ReadTimeout: 2 * time.Second,
-		Handler:     handler.New(con, metrics),
+		Handler:     handler.New(con),
 	}
 	return &Signal{
-		server:  srv,
-		conf:    config,
-		metrics: metrics,
+		server: srv,
+		conf:   config,
 	}
 }
 
