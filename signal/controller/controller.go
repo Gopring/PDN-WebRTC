@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"pdn/broker"
+	"pdn/metric"
 	"pdn/types/client/request"
 	"pdn/types/client/response"
 	"pdn/types/message"
@@ -21,34 +22,41 @@ const (
 
 // Controller handles HTTP requests.
 type Controller struct {
-	broker *broker.Broker
+	broker  *broker.Broker
+	metrics *metric.Metrics
 }
 
 // New creates a new instance of Controller.
-func New(b *broker.Broker) *Controller {
+func New(b *broker.Broker, m *metric.Metrics) *Controller {
 	return &Controller{
-		broker: b,
+		broker:  b,
+		metrics: m,
 	}
 }
 
 // Process handles HTTP requests.
 func (c *Controller) Process(conn *websocket.Conn) error {
+	c.metrics.IncrementClientConnectionAttempts()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	channelID, userID, err := c.authenticate(conn)
 	if err != nil {
+		c.metrics.IncrementClientConnectionFailures()
+
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
-	// 02. subscribe itself
+	c.metrics.IncrementClientConnectionSuccesses()
+
 	go c.sendResponse(ctx, conn, channelID, userID)
 
-	// 03. sendResponse message to broker
 	if err := c.receiveRequest(conn, channelID, userID); err != nil {
 		return fmt.Errorf("failed to receive request: %w", err)
 	}
 	return nil
 }
 
+// authenticate performs authentication for a WebSocket connection.
 func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) {
 	var req request.Common
 	if err := conn.ReadJSON(&req); err != nil {
@@ -75,6 +83,7 @@ func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) 
 	return payload.ChannelID, payload.UserID, nil
 }
 
+// sendResponse listens for messages from the broker and forwards them to the WebSocket client.
 func (c *Controller) sendResponse(ctx context.Context, conn *websocket.Conn, channelID, userID string) {
 	detail := broker.Detail(channelID + userID)
 	sub := c.broker.Subscribe(broker.ClientSocket, detail)
@@ -97,6 +106,7 @@ func (c *Controller) sendResponse(ctx context.Context, conn *websocket.Conn, cha
 	}
 }
 
+// receiveRequest reads and handles incoming requests from the WebSocket client.
 func (c *Controller) receiveRequest(conn *websocket.Conn, channelID, userID string) error {
 	for {
 		var req request.Common
@@ -110,6 +120,7 @@ func (c *Controller) receiveRequest(conn *websocket.Conn, channelID, userID stri
 	}
 }
 
+// handleRequest routes a request to the appropriate handler based on its type.
 func (c *Controller) handleRequest(req request.Common, channelID, userID string) error {
 	var err error
 	switch req.Type {
@@ -123,6 +134,7 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 	return err
 }
 
+// handlePush processes a "PUSH" request from the WebSocket client.
 func (c *Controller) handlePush(req request.Common, channelID, userID string) error {
 	var payload request.Push
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
@@ -141,6 +153,7 @@ func (c *Controller) handlePush(req request.Common, channelID, userID string) er
 	return nil
 }
 
+// handlePull processes a "PULL" request from the WebSocket client.
 func (c *Controller) handlePull(req request.Common, channelID, userID string) error {
 	var payload request.Pull
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
