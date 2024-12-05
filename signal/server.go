@@ -23,7 +23,7 @@ type Signal struct {
 // New creates a new instance of Signal.
 func New(config Config, metrics *metric.Metrics) *Signal {
 	brk := broker.New()
-	con := controller.New(brk)
+	con := controller.New(brk, metrics)
 	med := media.New(brk, metrics)
 	go med.Run()
 	srv := &http.Server{
