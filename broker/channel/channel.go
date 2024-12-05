@@ -1,21 +1,27 @@
-// Package channel provides the implementation of message channels.
+// Package channel manages message channels.
 package channel
 
 import (
+	"log"
 	"pdn/broker/subscription"
 	"sync"
+	"time"
 )
 
-// Channel represents a message channel that can have multiple subscribers.
+// Channel represents a message channel.
 type Channel struct {
-	mu   sync.RWMutex
-	subs []*subscription.Subscription
+	mu     sync.RWMutex
+	topic  string
+	detail string
+	subs   []*subscription.Subscription
 }
 
-// New creates and initializes a new Channel instance.
-func New() *Channel {
+// New creates a new Channel instance.
+func New(topic, detail string) *Channel {
 	return &Channel{
-		subs: make([]*subscription.Subscription, 0),
+		topic:  topic,
+		detail: detail,
+		subs:   make([]*subscription.Subscription, 0),
 	}
 }
 
@@ -25,8 +31,12 @@ func (c *Channel) SendAll(message any) {
 	defer c.mu.RUnlock()
 
 	for _, sub := range c.subs {
-		// Send message in a non-blocking manner
-		go sub.Send(message)
+		select {
+		case sub.Send() <- message:
+			return
+		case <-time.After(1 * time.Second):
+			log.Printf("Timeout occurs in sending message to Topic: %s, Detail: %s, Message:%v", c.topic, c.detail, message)
+		}
 	}
 }
 

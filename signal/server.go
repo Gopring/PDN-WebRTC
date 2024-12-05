@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"pdn/broker"
+	"pdn/coordinator"
+	"pdn/database/memory"
 	"pdn/media"
 	"pdn/signal/controller"
 	"pdn/signal/handler"
@@ -21,9 +23,12 @@ type Signal struct {
 // New creates a new instance of Signal.
 func New(config Config) *Signal {
 	brk := broker.New()
-	con := controller.New(brk)
+	db := memory.New(config.SetDefaultChannel)
+	con := controller.New(brk, db)
 	med := media.New(brk)
+	cod := coordinator.New(brk, db)
 	go med.Run()
+	go cod.Run()
 	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", config.Port),
 		ReadTimeout: 2 * time.Second,

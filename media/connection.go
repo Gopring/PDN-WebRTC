@@ -1,4 +1,4 @@
-// Package media contains managing channels and connections using WebRTC.
+// Package media contains managing streams and connections using WebRTC.
 package media
 
 import (

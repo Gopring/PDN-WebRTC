@@ -1,29 +1,29 @@
-// Package subscription provides a mechanism for managing message subscriptions.
+// Package subscription manages message subscriptions.
 package subscription
 
-// Subscription represents a message subscription.
+// Subscription is a message subscription.
 type Subscription struct {
 	queue chan any
 }
 
-// New creates and initializes a new Subscription instance.
+// New creates a new subscription instance.
 func New() *Subscription {
 	return &Subscription{
 		queue: make(chan any, 1),
 	}
 }
 
-// Send enqueues a message to the subscription.
-func (s *Subscription) Send(message any) {
-	s.queue <- message
+// Send sends a message to the subscription.
+func (s *Subscription) Send() chan<- any {
+	return s.queue
 }
 
-// Receive retrieves the channel for incoming messages.
+// Receive returns a channel to receive messages.
 func (s *Subscription) Receive() <-chan any {
 	return s.queue
 }
 
-// Close closes the subscription, releasing any resources.
+// Close closes the subscription.
 func (s *Subscription) Close() {
 	close(s.queue)
 }
