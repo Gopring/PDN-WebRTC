@@ -1,3 +1,4 @@
+// Package channel provides the implementation of message channels.
 package channel
 
 import (
@@ -5,11 +6,13 @@ import (
 	"sync"
 )
 
+// Channel represents a message channel that can have multiple subscribers.
 type Channel struct {
 	mu   sync.RWMutex
 	subs []*subscription.Subscription
 }
 
+// New creates and initializes a new Channel instance.
 func New() *Channel {
 	return &Channel{
 		subs: make([]*subscription.Subscription, 0),
