@@ -17,13 +17,16 @@ import (
 
 // Metrics contains the Prometheus metrics server and registered custom metrics.
 type Metrics struct {
-	httpServer           *http.Server
-	config               Config
-	webSocketConnections prometheus.Gauge
-	webRTCConnections    prometheus.Gauge
-	cpuUsage             prometheus.Gauge
-	memoryUsage          prometheus.Gauge
-	networkUsage         *prometheus.GaugeVec
+	httpServer                *http.Server
+	config                    Config
+	webSocketConnections      prometheus.Gauge
+	webRTCConnections         prometheus.Gauge
+	cpuUsage                  prometheus.Gauge
+	memoryUsage               prometheus.Gauge
+	networkUsage              *prometheus.GaugeVec
+	clientConnectionAttempts  prometheus.Counter
+	clientConnectionSuccesses prometheus.Counter
+	clientConnectionFailures  prometheus.Counter
 }
 
 // Config defines the configuration for the metrics server.
@@ -62,6 +65,18 @@ func New(config Config) *Metrics {
 			Name: "network_usage_bytes",
 			Help: "Current network usage in bytes.",
 		}, []string{"direction"}), // Direction: "inbound" or "outbound"
+		clientConnectionAttempts: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "client_connection_attempts_total",
+			Help: "Total number of client connection attempts.",
+		}),
+		clientConnectionSuccesses: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "client_connection_successes_total",
+			Help: "Total number of successful client connections.",
+		}),
+		clientConnectionFailures: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "client_connection_failures_total",
+			Help: "Total number of failed client connections.",
+		}),
 	}
 }
 
@@ -72,6 +87,10 @@ func (m *Metrics) RegisterMetrics() {
 	prometheus.MustRegister(m.cpuUsage)
 	prometheus.MustRegister(m.memoryUsage)
 	prometheus.MustRegister(m.networkUsage)
+	prometheus.MustRegister(m.clientConnectionAttempts)
+	prometheus.MustRegister(m.clientConnectionSuccesses)
+	prometheus.MustRegister(m.clientConnectionFailures)
+
 }
 
 // Start initializes and starts the metrics HTTP server.
@@ -173,4 +192,19 @@ func (m *Metrics) DecrementWebRTCConnections() {
 // UpdateNetworkUsage updates network usage metrics (e.g., inbound and outbound traffic).
 func (m *Metrics) UpdateNetworkUsage(direction string, bytes float64) {
 	m.networkUsage.WithLabelValues(direction).Set(bytes)
+}
+
+// IncrementClientConnectionAttempts increments the client connection attempts counter.
+func (m *Metrics) IncrementClientConnectionAttempts() {
+	m.clientConnectionAttempts.Inc()
+}
+
+// IncrementClientConnectionSuccesses increments the client connection successes counter.
+func (m *Metrics) IncrementClientConnectionSuccesses() {
+	m.clientConnectionSuccesses.Inc()
+}
+
+// IncrementClientConnectionFailures increments the client connection failures counter.
+func (m *Metrics) IncrementClientConnectionFailures() {
+	m.clientConnectionFailures.Inc()
 }
