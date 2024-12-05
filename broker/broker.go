@@ -1,3 +1,4 @@
+// Package broker provides a publish-subscribe mechanism for managing topics and subscriptions.
 package broker
 
 import (
@@ -8,20 +9,26 @@ import (
 	"pdn/broker/subscription"
 )
 
+// Topic represents a type-safe enumerator for different broker topics.
 type Topic int
+
+// Detail represents a specific detail associated with a broker topic.
 type Detail string
 
+// Topics for message brokering.
 const (
 	ClientSocket Topic = iota
 	ClientMessage
 	Media
 )
 
+// Details for specific message types.
 const (
 	PUSH Detail = "PUSH"
 	PULL Detail = "PULL"
 )
 
+// Broker manages topics and details, allowing subscribers to receive messages.
 type Broker struct {
 	mu       sync.RWMutex
 	channels map[Topic]map[Detail]*channel.Channel

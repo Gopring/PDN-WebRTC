@@ -32,6 +32,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+
 	defer func(conn *websocket.Conn) {
 		err := conn.Close()
 		if err != nil {
