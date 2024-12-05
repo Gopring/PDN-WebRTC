@@ -11,4 +11,5 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - prometheus:9090
+        - host.docker.internal:9090 # Mac/Windows
+        - 172.17.0.1:9090          # Linux (docker0 bridge IP)
