@@ -48,6 +48,7 @@ func New(b *broker.Broker) *Media {
 func (m *Media) Run() {
 	upEvent := m.broker.Subscribe(broker.Media, broker.UPSTREAM)
 	downEvent := m.broker.Subscribe(broker.Media, broker.DOWNSTREAM)
+	closureEvent := m.broker.Subscribe(broker.Media, broker.CLOSURE)
 
 	for {
 		var err error
@@ -56,6 +57,8 @@ func (m *Media) Run() {
 			go m.handleUpstream(event)
 		case event := <-downEvent.Receive():
 			go m.handleDownstream(event)
+		case event := <-closureEvent.Receive():
+			go m.handleClosure(event)
 		}
 		if err != nil {
 			log.Printf("Failed to handle event in Media: %v", err)
@@ -107,6 +110,26 @@ func (m *Media) handleDownstream(event any) {
 		log.Printf("failed to publish down response: %v", err)
 		return
 	}
+}
+
+// handleClosure handles a close event.
+func (m *Media) handleClosure(event any) {
+	closure, ok := event.(message.Closure)
+	if !ok {
+		log.Printf("failed to cast event to Closure: %v", event)
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conn, ok := m.connections[closure.ConnectionID]
+	if !ok {
+		log.Printf("connection not found: %s", closure.ConnectionID)
+		return
+	}
+	if err := conn.Close(); err != nil {
+		log.Printf("failed to closure connection: %v", err)
+	}
+	delete(m.connections, closure.ConnectionID)
 }
 
 // AddUpstream creates a new upstream connection and adds it to the channel.

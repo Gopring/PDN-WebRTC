@@ -45,15 +45,14 @@ type Disconnected struct {
 // Succeed is data type for forwarding succeed
 type Succeed struct {
 	ConnectionID string
-	ChannelID    string
-	From         string
-	To           string
 }
 
 // Failed is data type for forwarding failed
 type Failed struct {
 	ConnectionID string
-	ChannelID    string
-	From         string
-	To           string
+}
+
+// Closure is data type for closing connection
+type Closure struct {
+	ConnectionID string
 }

@@ -26,7 +26,6 @@ type Forward struct {
 type Fetch struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
-	SDP          string `json:"sdp"`
 }
 
 // Exchange is data type for exchanging SDP

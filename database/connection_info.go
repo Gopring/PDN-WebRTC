@@ -1,17 +1,24 @@
 package database
 
-import "time"
+import (
+	"time"
+)
+
+// Status is the status of the connection.
+const (
+	Initialized = iota
+	Connected
+)
 
 // ConnectionInfo is a struct for WebRTC connection information.
 type ConnectionInfo struct {
-	ID                  string
-	ChannelID           string
-	To                  string
-	From                string
-	IsConnectWithServer bool
-	IsConnected         bool
-	CreatedAt           time.Time
-	ConnectedAt         time.Time
+	ID          string
+	ChannelID   string
+	To          string
+	From        string
+	Status      int
+	CreatedAt   time.Time
+	ConnectedAt time.Time
 }
 
 // Authorize checks if the given channel ID and client ID are authorized.
@@ -27,6 +34,16 @@ func (c *ConnectionInfo) GetCounterpart(clientID string) string {
 	return c.To
 }
 
+// IsUpstream checks if the connection is an upstream connection.
+func (c *ConnectionInfo) IsUpstream() bool {
+	return c.To == MediaServerID
+}
+
+// IsPeerConnection checks if the connection is a peer connection.
+func (c *ConnectionInfo) IsPeerConnection() bool {
+	return c.To != MediaServerID && c.From != MediaServerID
+}
+
 // DeepCopy creates a deep copy of the given ConnectionInfo.
 func (c *ConnectionInfo) DeepCopy() *ConnectionInfo {
 	return &ConnectionInfo{
@@ -34,6 +51,7 @@ func (c *ConnectionInfo) DeepCopy() *ConnectionInfo {
 		ChannelID:   c.ChannelID,
 		To:          c.To,
 		From:        c.From,
+		Status:      c.Status,
 		CreatedAt:   c.CreatedAt,
 		ConnectedAt: c.ConnectedAt,
 	}
