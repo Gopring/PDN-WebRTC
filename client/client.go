@@ -70,7 +70,7 @@ package client
 //func (c *Client) activate() error {
 //	_, err := c.push(request.Activate{
 //		ChannelID: c.channelID,
-//		UserID:    c.userID,
+//		ClientID:    c.userID,
 //	})
 //	if err != nil {
 //		return err

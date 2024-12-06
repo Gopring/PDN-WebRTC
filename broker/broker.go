@@ -1,4 +1,4 @@
-// Package broker provides a publish-subscribe mechanism for managing topics and subscriptions.
+// Package broker manages message channels and subscriptions.
 package broker
 
 import (
@@ -9,26 +9,33 @@ import (
 	"pdn/broker/subscription"
 )
 
-// Topic represents a type-safe enumerator for different broker topics.
+// Topic represents a message topic.
 type Topic int
 
-// Detail represents a specific detail associated with a broker topic.
+// Detail represents a message detail.
 type Detail string
 
-// Topics for message brokering.
+// Topic constants for message topics.
 const (
 	ClientSocket Topic = iota
 	ClientMessage
 	Media
+	Connection
 )
 
-// Details for specific message types.
+// Detail constants for message details.
 const (
-	PUSH Detail = "PUSH"
-	PULL Detail = "PULL"
+	PUSH         Detail = "PUSH"
+	PULL         Detail = "PULL"
+	UPSTREAM     Detail = "UPSTREAM"
+	DOWNSTREAM   Detail = "DOWNSTREAM"
+	CONNECTED    Detail = "CONNECTED"
+	DISCONNECTED Detail = "DISCONNECTED"
+	FAILED       Detail = "FAILED"
+	SUCCEED      Detail = "SUCCEED"
 )
 
-// Broker manages topics and details, allowing subscribers to receive messages.
+// Broker is a message broker that manages message channels and subscriptions.
 type Broker struct {
 	mu       sync.RWMutex
 	channels map[Topic]map[Detail]*channel.Channel
@@ -84,7 +91,7 @@ func (b *Broker) ensureChannel(topic Topic, detail Detail) {
 		b.channels[topic] = make(map[Detail]*channel.Channel)
 	}
 	if _, exists := b.channels[topic][detail]; !exists {
-		b.channels[topic][detail] = channel.New()
+		b.channels[topic][detail] = channel.New(topic.String(), string(detail))
 	}
 }
 

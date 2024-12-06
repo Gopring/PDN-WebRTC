@@ -1,5 +1,5 @@
-// Package media contains managing channels and connections using WebRTC.
-package media
+// Package stream contains managing connections using WebRTC
+package stream
 
 import (
 	"errors"
@@ -9,21 +9,21 @@ import (
 	"log"
 )
 
-// Channel manages connections
-type Channel struct {
-	upstream *webrtc.TrackLocalStaticRTP
+// Stream manages connections
+type Stream struct {
+	Track *webrtc.TrackLocalStaticRTP
 }
 
-// NewChannel creates a new Channel instance.
-func NewChannel() *Channel {
-	return &Channel{}
+// New creates a new Stream instance.
+func New() *Stream {
+	return &Stream{}
 }
 
-// SetUpstream sets the upstream connection.
-func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
+// SetUpstream sets the Track connection.
+func (s *Stream) SetUpstream(conn *webrtc.PeerConnection, id string) {
 	conn.OnTrack(func(remoteTrack *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		var newTrackErr error
-		c.upstream, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", id)
+		s.Track, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", id)
 		if newTrackErr != nil {
 			// TODO(window9u): we should handle this panic properly.
 			log.Println(newTrackErr)
@@ -36,7 +36,7 @@ func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
 				log.Println(newTrackErr)
 				return
 			}
-			if _, err := c.upstream.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
+			if _, err := s.Track.Write(rtpBuf[:i]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 				log.Println(newTrackErr)
 				return
 			}
@@ -45,17 +45,18 @@ func (c *Channel) SetUpstream(conn *webrtc.PeerConnection, id string) {
 }
 
 // SetDownstream sets the downstream connection.
-func (c *Channel) SetDownstream(conn *webrtc.PeerConnection) error {
-	if c.upstream == nil {
-		return errors.New("upstream not exists")
+func (s *Stream) SetDownstream(conn *webrtc.PeerConnection) error {
+	if s.Track == nil {
+		return errors.New("track not exists")
 	}
 
-	rtpSender, err := conn.AddTrack(c.upstream)
+	rtpSender, err := conn.AddTrack(s.Track)
 	if err != nil {
 		return fmt.Errorf("failed to add track: %w", err)
 	}
 
 	// ReadJSON RTCP packets
+	// TODO(window9u): we should control this goroutine properly.
 	go func() {
 		rtcpBuf := make([]byte, 1500)
 		for {

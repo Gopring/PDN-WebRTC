@@ -1,29 +1,181 @@
-// Package coordinator provides mechanisms to coordinate communication and data flow
-// between clients using the broker system.
+// Package coordinator manages the WebRTC connections that Client to Media server and Client to Client.
 package coordinator
 
 import (
+	"log"
 	"pdn/broker"
+	"pdn/database"
+	"pdn/types/message"
 )
 
-// Coordinator is responsible for managing and coordinating communication
-// between multiple clients through the broker.
+// Coordinator manages the WebRTC connections that Client to Media server and Client to Client.
 type Coordinator struct {
-	broker *broker.Broker
+	broker   *broker.Broker
+	database database.Database
 }
 
-// Client represents an individual client in the coordination system.
-//type Client struct {
-//	forwardTo map[string]*Client
-//	fetchFrom map[string]*Client
-//}
-
-// New creates and initializes a new Coordinator instance.
-func New(b *broker.Broker) *Coordinator {
+// New creates a new instance of Coordinator.
+func New(b *broker.Broker, db database.Database) *Coordinator {
 	return &Coordinator{
-		broker: b,
+		broker:   b,
+		database: db,
 	}
 }
 
-//func (p *Coordinator) Run() error {
-//}
+// Run starts the Coordinator instance.
+func (c *Coordinator) Run() {
+	pushEvent := c.broker.Subscribe(broker.ClientMessage, broker.PUSH)
+	pullEvent := c.broker.Subscribe(broker.ClientMessage, broker.PULL)
+	connectedEvent := c.broker.Subscribe(broker.Media, broker.CONNECTED)
+	disconnectedEvent := c.broker.Subscribe(broker.Media, broker.DISCONNECTED)
+	failedEvent := c.broker.Subscribe(broker.Connection, broker.FAILED)
+	succeedEvent := c.broker.Subscribe(broker.Connection, broker.SUCCEED)
+	for {
+		select {
+		case event := <-pushEvent.Receive():
+			go c.handlePush(event)
+		case event := <-pullEvent.Receive():
+			go c.handlePull(event)
+		case event := <-connectedEvent.Receive():
+			go c.handleConnected(event)
+		case event := <-disconnectedEvent.Receive():
+			go c.handleDisconnected(event)
+		case event := <-failedEvent.Receive():
+			go c.handleFailed(event)
+		case event := <-succeedEvent.Receive():
+			go c.handleSucceed(event)
+		}
+	}
+}
+
+// handlePush handles the push event. push event means that a client requests
+// to push stream to Media server.
+func (c *Coordinator) handlePush(event any) {
+	// 01. Parse the event to message.Push
+	msg, ok := event.(message.Push)
+	if !ok {
+		log.Printf("error occurs in parsing push message %v", event)
+		return
+	}
+
+	// 02. Create connection info
+	connInfo, err := c.database.CreatePushConnectionInfo(msg.ChannelID, msg.ClientID, msg.ConnectionID)
+	if err != nil {
+		log.Printf("error occurs in creating connection info %v", err)
+		return
+	}
+
+	// 03. Publish event to Media server
+	if err := c.broker.Publish(broker.Media, broker.UPSTREAM, message.Upstream{
+		ConnectionID: connInfo.ID,
+		Key:          connInfo.ChannelID + connInfo.From,
+		SDP:          msg.SDP,
+	}); err != nil {
+		log.Printf("error occurs in publishing push message %v", err)
+		return
+	}
+}
+
+// handlePull handles the pull event. pull event means that a client requests
+// to pull stream. Currently, stream is pulled only from Media server. In the
+// future, it could be pulled from other clients directly.
+func (c *Coordinator) handlePull(event any) {
+	// 01. Parse the event to message.Pull
+	msg, ok := event.(message.Pull)
+	if !ok {
+		log.Printf("error occurs in parsing pull message %v", event)
+		return
+	}
+
+	// 02. Create connection info
+	connInfo, err := c.database.CreatePullConnectionInfo(msg.ChannelID, msg.ClientID, msg.ConnectionID)
+	if err != nil {
+		log.Printf("error occurs in creating connection info %v", err)
+		return
+	}
+
+	streamInfo, err := c.database.FindUpstreamInfo(msg.ChannelID)
+	if err != nil {
+		log.Printf("error occurs in finding upstream info %v", err)
+		return
+	}
+
+	// 03. Publish event to Media server
+	if err := c.broker.Publish(broker.Media, broker.DOWNSTREAM, message.Downstream{
+		ConnectionID: connInfo.ID,
+		StreamID:     streamInfo.ID,
+		Key:          connInfo.ChannelID + connInfo.To,
+		SDP:          msg.SDP,
+	}); err != nil {
+		log.Printf("error occurs in publishing pull message %v", err)
+		return
+	}
+}
+
+// handleConnected handles the connected event. This event is about Media server to client
+func (c *Coordinator) handleConnected(event any) {
+	// 01. Parse the event to message.Connected
+	msg, ok := event.(message.Connected)
+	if !ok {
+		log.Printf("error occurs in parsing connected message %v", event)
+		return
+	}
+
+	// 02. Update connection info
+	if err := c.database.UpdateConnectionInfo(true, msg.ConnectionID); err != nil {
+		log.Printf("error occurs in update connection info %v", err)
+		return
+	}
+
+	//// 03. Find user info to forward
+	//userInfo, err := c.database.FindClientInfoToForward(msg.ChannelID, msg.ClientID)
+	//if err != nil {
+	//	log.Printf("error occurs in finding user info to forward %v", err)
+	//	return
+	//}
+	//if userInfo == nil {
+	//	log.Printf("no user info to forward")
+	//	return
+	//}
+	//
+	//// 04. Create connection info between two clients
+	//connInfo, err := c.database.CreatePeerConnectionInfo(msg.ChannelID, userInfo.ID, msg.ClientID, shortuuid.New())
+	//if err != nil {
+	//	log.Printf("error occurs in creating connection info between two clients %v", err)
+	//	return
+	//}
+	//
+	//// 05. Publish forward and fetch message
+	//if err := c.broker.Publish(broker.ClientSocket, broker.Detail(msg.ChannelID+msg.ClientID), response.Fetch{
+	//	ConnectionID: connInfo.ID,
+	//	From:         userInfo.ID,
+	//}); err != nil {
+	//	log.Printf("error occurs in publishing forward message %v", err)
+	//	return
+	//}
+	//if err := c.broker.Publish(broker.ClientSocket, broker.Detail(msg.ChannelID+userInfo.ID), response.Forward{
+	//	ConnectionID: connInfo.ID,
+	//	To:           msg.ClientID,
+	//}); err != nil {
+	//	log.Printf("error occurs in publishing forward message %v", err)
+	//	return
+	//}
+}
+
+// handleDisconnected handles the disconnected event. This event is about Media server to client
+func (c *Coordinator) handleDisconnected(_ any) {
+	// 01. Parse the event to message.Disconnected
+
+	// 02. Find user info by channel id and user id
+}
+
+// handleFailed handles the failed event. This event is about client to client
+func (c *Coordinator) handleFailed(_ any) {
+	//01. Parse the event to message.Failure
+
+	// 02. Find user info by channel id and user id
+}
+
+func (c *Coordinator) handleSucceed(_ any) {
+
+}

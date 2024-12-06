@@ -45,6 +45,7 @@ func Parse(w io.Writer, args []string) (signal.Config, error) {
 	fs.BoolVar(&con.Debug, "debug", false, "debug mode")
 	fs.StringVar(&con.KeyFile, "key", "", "key file path")
 	fs.StringVar(&con.CertFile, "cert", "", "cert file path")
+	fs.BoolVar(&con.SetDefaultChannel, "setDefaultChannel", false, "set default channel for debug or test")
 
 	err := fs.Parse(args)
 	if err != nil {
