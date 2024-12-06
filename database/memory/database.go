@@ -200,8 +200,8 @@ func (d *DB) CreatePullConnectionInfo(channelID, clientID, connectionID string) 
 	return newConn.DeepCopy(), nil
 }
 
-// CreateClientConnectionInfo creates a new connection between two clients.
-func (d *DB) CreateClientConnectionInfo(channelID, from, to, connectionID string) (*database.ConnectionInfo, error) {
+// CreatePeerConnectionInfo creates a new connection between two clients.
+func (d *DB) CreatePeerConnectionInfo(channelID, from, to, connectionID string) (*database.ConnectionInfo, error) {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
 	raw, err := txn.First(tblConnections, idxConnID, connectionID)

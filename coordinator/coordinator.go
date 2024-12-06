@@ -139,7 +139,7 @@ func (c *Coordinator) handleConnected(event any) {
 	//}
 	//
 	//// 04. Create connection info between two clients
-	//connInfo, err := c.database.CreateClientConnectionInfo(msg.ChannelID, userInfo.ID, msg.ClientID, shortuuid.New())
+	//connInfo, err := c.database.CreatePeerConnectionInfo(msg.ChannelID, userInfo.ID, msg.ClientID, shortuuid.New())
 	//if err != nil {
 	//	log.Printf("error occurs in creating connection info between two clients %v", err)
 	//	return
