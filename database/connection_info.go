@@ -14,6 +14,19 @@ type ConnectionInfo struct {
 	ConnectedAt         time.Time
 }
 
+// Authorize checks if the given channel ID and client ID are authorized.
+func (c *ConnectionInfo) Authorize(channelID, clientID string) bool {
+	return c.ChannelID == channelID && (c.To == clientID || c.From == clientID)
+}
+
+// GetCounterpart returns the counterpart of the given client ID.
+func (c *ConnectionInfo) GetCounterpart(clientID string) string {
+	if c.To == clientID {
+		return c.From
+	}
+	return c.To
+}
+
 // DeepCopy creates a deep copy of the given ConnectionInfo.
 func (c *ConnectionInfo) DeepCopy() *ConnectionInfo {
 	return &ConnectionInfo{
