@@ -43,10 +43,9 @@ func (c *Controller) Process(conn *websocket.Conn) error {
 	if err != nil {
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
-	// 02. subscribe itself
+
 	go c.sendResponse(ctx, conn, channelID, userID)
 
-	// 03. sendResponse message to broker
 	if err := c.receiveRequest(conn, channelID, userID); err != nil {
 		return fmt.Errorf("failed to receive request: %w", err)
 	}
@@ -71,8 +70,9 @@ func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) 
 	if err != nil {
 		return "", "", fmt.Errorf("failed to find channel info: %w", err)
 	}
-	if channelInfo.Key != payload.ChannelKey {
+	if !channelInfo.Authenticate(payload.ChannelKey) {
 		return "", "", fmt.Errorf("invalid key: %s", payload.ChannelKey)
+
 	}
 
 	if err := c.database.CreateClientInfo(payload.ChannelID, payload.ClientID); err != nil {
@@ -91,6 +91,7 @@ func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) 
 	return payload.ChannelID, payload.ClientID, nil
 }
 
+// sendResponse sends response to the client.
 func (c *Controller) sendResponse(ctx context.Context, conn *websocket.Conn, channelID, userID string) {
 	detail := broker.Detail(channelID + userID)
 	sub := c.broker.Subscribe(broker.ClientSocket, detail)
@@ -113,6 +114,7 @@ func (c *Controller) sendResponse(ctx context.Context, conn *websocket.Conn, cha
 	}
 }
 
+// receiveRequest receives request from the websocket and call handleRequest.
 func (c *Controller) receiveRequest(conn *websocket.Conn, channelID, userID string) error {
 	for {
 		var req request.Common
@@ -126,6 +128,7 @@ func (c *Controller) receiveRequest(conn *websocket.Conn, channelID, userID stri
 	}
 }
 
+// handleRequest parse the request type and call the corresponding handler function
 func (c *Controller) handleRequest(req request.Common, channelID, userID string) error {
 	var err error
 	switch req.Type {
@@ -133,12 +136,17 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 		err = c.handlePush(req, channelID, userID)
 	case request.PULL:
 		err = c.handlePull(req, channelID, userID)
+	case request.FORWARD:
+		err = c.handleForward(req, channelID, userID)
+	case request.EXCHANGE:
+		err = c.handleExchange(req, channelID, userID)
 	default:
 		err = fmt.Errorf("invalid request type: %s", req.Type)
 	}
 	return err
 }
 
+// handlePush handles the push event. push event means that a client will push stream to media server.
 func (c *Controller) handlePush(req request.Common, channelID, userID string) error {
 	var payload request.Push
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
@@ -157,6 +165,7 @@ func (c *Controller) handlePush(req request.Common, channelID, userID string) er
 	return nil
 }
 
+// handlePull handles the pull event. pull event means that a client will pull stream from anyone.
 func (c *Controller) handlePull(req request.Common, channelID, userID string) error {
 	var payload request.Pull
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
@@ -171,6 +180,61 @@ func (c *Controller) handlePull(req request.Common, channelID, userID string) er
 	}
 	if err := c.broker.Publish(broker.ClientMessage, broker.PULL, msg); err != nil {
 		return fmt.Errorf("failed to publish pull message: %w", err)
+	}
+	return nil
+}
+
+// handleExchange handles the exchange event. exchange event means that a client will exchange SDP or
+// candidate with another client.
+func (c *Controller) handleExchange(req request.Common, channelID, userID string) error {
+	var payload request.Exchange
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal exchange payload: %w", err)
+	}
+	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("failed to find connection info: %w", err)
+	}
+	if !connInfo.Authorize(channelID, userID) {
+		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
+	}
+
+	counterpart := connInfo.GetCounterpart(userID)
+
+	msg := response.Exchange{
+		ConnectionID: payload.ConnectionID,
+		Type:         payload.Type,
+		Data:         payload.Data,
+	}
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
+		return fmt.Errorf("failed to publish exchange message: %w", err)
+	}
+	return nil
+}
+
+// handleForward handles the forward event. forward event means that a client requests
+func (c *Controller) handleForward(req request.Common, channelID, userID string) error {
+	var payload request.Exchange
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal exchange payload: %w", err)
+	}
+	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("failed to find connection info: %w", err)
+	}
+	if !connInfo.Authorize(channelID, userID) {
+		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
+	}
+
+	counterpart := connInfo.GetCounterpart(userID)
+
+	msg := response.Exchange{
+		ConnectionID: payload.ConnectionID,
+		Type:         payload.Type,
+		Data:         payload.Data,
+	}
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
+		return fmt.Errorf("failed to publish exchange message: %w", err)
 	}
 	return nil
 }

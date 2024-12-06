@@ -75,10 +75,11 @@ func (m *Media) handleUpstream(event any) {
 		log.Printf("failed to add upstream: %v", err)
 		return
 	}
-	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(up.Key), response.Push{
-		Type:         response.PUSH,
+	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(up.Key), response.Exchange{
+		Type:         response.EXCHANGE,
 		ConnectionID: up.ConnectionID,
-		SDP:          serverSDP,
+		DataType:     "answer",
+		Data:         serverSDP,
 	}); err != nil {
 		log.Printf("failed to publish up response: %v", err)
 		return
@@ -97,10 +98,11 @@ func (m *Media) handleDownstream(event any) {
 		log.Printf("failed to add downstream: %v", err)
 		return
 	}
-	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(down.Key), response.Pull{
-		Type:         response.PULL,
+	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(down.Key), response.Exchange{
+		Type:         response.EXCHANGE,
 		ConnectionID: down.ConnectionID,
-		SDP:          serverSDP,
+		DataType:     "answer",
+		Data:         serverSDP,
 	}); err != nil {
 		log.Printf("failed to publish down response: %v", err)
 		return

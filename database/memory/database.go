@@ -241,6 +241,20 @@ func (d *DB) FindUpstreamInfo(channelID string) (*database.ConnectionInfo, error
 	return raw.(*database.ConnectionInfo).DeepCopy(), nil
 }
 
+// FindConnectionInfoByID finds a connection by its ID.
+func (d *DB) FindConnectionInfoByID(ConnectionID string) (*database.ConnectionInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	raw, err := txn.First(tblConnections, idxConnID, ConnectionID)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("%s: %w", ConnectionID, database.ErrConnectionNotFound)
+	}
+	return raw.(*database.ConnectionInfo).DeepCopy(), nil
+}
+
 // UpdateConnectionInfo updates the connection status.
 func (d *DB) UpdateConnectionInfo(connected bool, connectionID string) error {
 	txn := d.db.Txn(true)

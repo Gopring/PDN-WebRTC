@@ -52,5 +52,6 @@ type Database interface {
 	CreatePullConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
 	CreatePeerConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
 	FindUpstreamInfo(channelID string) (*ConnectionInfo, error)
+	FindConnectionInfoByID(ConnectionID string) (*ConnectionInfo, error)
 	UpdateConnectionInfo(connected bool, connectionID string) error
 }

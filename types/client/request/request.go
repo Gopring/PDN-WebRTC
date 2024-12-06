@@ -8,6 +8,8 @@ const (
 	ACTIVATE = "ACTIVATE"
 	PUSH     = "PUSH"
 	PULL     = "PULL"
+	FORWARD  = "FORWARD"
+	EXCHANGE = "EXCHANGE"
 )
 
 // Common is data type that must be implemented in all request
@@ -33,4 +35,11 @@ type Push struct {
 type Pull struct {
 	ConnectionID string `json:"connection_id"`
 	SDP          string `json:"sdp"`
+}
+
+// Exchange is data type for exchanging SDP
+type Exchange struct {
+	ConnectionID string `json:"connection_id"`
+	Type         string `json:"type"`
+	Data         string `json:"data"`
 }
