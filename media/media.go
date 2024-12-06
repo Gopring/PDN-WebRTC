@@ -109,7 +109,10 @@ func (m *Media) handleDownstream(event any) {
 
 // AddUpstream creates a new upstream connection and adds it to the channel.
 func (m *Media) AddUpstream(connectionID, sdp string) (string, error) {
-	conn, err := m.createConnection(connectionID, true)
+	conn, err := m.createPushConn(connectionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to create connection: %w", err)
+	}
 
 	s, err := m.createUpstream(conn, connectionID)
 	if err != nil {
@@ -128,7 +131,10 @@ func (m *Media) AddUpstream(connectionID, sdp string) (string, error) {
 
 // AddDownstream creates a new downstream connection and adds it to the channel.
 func (m *Media) AddDownstream(connectionID, streamID, sdp string) (string, error) {
-	conn, err := m.createConnection(connectionID, false)
+	conn, err := m.createPullConn(connectionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to create connection: %w", err)
+	}
 
 	if err = m.setDownstream(conn, streamID); err != nil {
 		return "", fmt.Errorf("failed to set downstream: %w", err)
@@ -142,28 +148,33 @@ func (m *Media) AddDownstream(connectionID, streamID, sdp string) (string, error
 	return conn.LocalDescription().SDP, nil
 }
 
-// createConnection creates a new connection.
-func (m *Media) createConnection(connectionID string, isInbound bool) (*webrtc.PeerConnection, error) {
+// createPushConn creates a new connection.
+func (m *Media) createPushConn(connectionID string) (*webrtc.PeerConnection, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.connections[connectionID]; ok {
 		return nil, fmt.Errorf("connection already exists: %s", connectionID)
 	}
-	if isInbound {
-		conn, err := NewInboundConnection(m.connectionConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create inbound connection: %w", err)
-		}
-		m.publishStateChange(conn, connectionID)
-		return conn, nil
-	} else {
-		conn, err := NewOutboundConnection(m.connectionConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create inbound connection: %w", err)
-		}
-		m.publishStateChange(conn, connectionID)
-		return conn, nil
+	conn, err := NewInboundConnection(m.connectionConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create inbound connection: %w", err)
 	}
+	m.publishStateChange(conn, connectionID)
+	return conn, nil
+}
+
+func (m *Media) createPullConn(connectionID string) (*webrtc.PeerConnection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.connections[connectionID]; ok {
+		return nil, fmt.Errorf("connection already exists: %s", connectionID)
+	}
+	conn, err := NewOutboundConnection(m.connectionConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create inbound connection: %w", err)
+	}
+	m.publishStateChange(conn, connectionID)
+	return conn, nil
 }
 
 // createUpstream adds a channel to the media.
@@ -191,14 +202,6 @@ func (m *Media) setDownstream(conn *webrtc.PeerConnection, streamID string) erro
 		return fmt.Errorf("failed to set downstream: %w", err)
 	}
 	return nil
-}
-
-// ChannelExists checks if a channel exists.
-func (m *Media) connectionExists(channelID string) bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	_, ok := m.streams[channelID]
-	return ok
 }
 
 // publishStateChange publishes the state change of a connection.

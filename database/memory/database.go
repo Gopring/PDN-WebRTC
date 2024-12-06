@@ -135,8 +135,45 @@ func (d *DB) DeleteClientInfoByID(channelID, clientID string) error {
 	return nil
 }
 
-// CreateServerConnectionInfo creates a new connection between two users.
-func (d *DB) CreateServerConnectionInfo(isPush bool, channelID, clientID, connectionID string) (*database.ConnectionInfo, error) {
+// CreatePushConnectionInfo creates a new connection between two users.
+func (d *DB) CreatePushConnectionInfo(channelID, clientID, connectionID string) (*database.ConnectionInfo, error) {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+
+	raw, err := txn.First(tblConnections, idxConnTo, channelID, database.MediaServerID)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	if raw != nil {
+		return nil, fmt.Errorf("%s: %w", clientID, database.ErrPushConnectionExists)
+	}
+
+	raw, err = txn.First(tblConnections, idxConnID, connectionID)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	if raw != nil {
+		return nil, fmt.Errorf("%s: %w", connectionID, database.ErrConnectionAlreadyExists)
+	}
+
+	newConn := &database.ConnectionInfo{
+		ID:                  connectionID,
+		ChannelID:           channelID,
+		From:                clientID,
+		To:                  database.MediaServerID,
+		IsConnectWithServer: true,
+		CreatedAt:           time.Now(),
+	}
+
+	if err := txn.Insert(tblConnections, newConn); err != nil {
+		return nil, fmt.Errorf("insert connection: %w", err)
+	}
+	txn.Commit()
+	return newConn.DeepCopy(), nil
+}
+
+// CreatePullConnectionInfo creates a new connection between two users.
+func (d *DB) CreatePullConnectionInfo(channelID, clientID, connectionID string) (*database.ConnectionInfo, error) {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
 	raw, err := txn.First(tblConnections, idxConnID, connectionID)
@@ -147,29 +184,13 @@ func (d *DB) CreateServerConnectionInfo(isPush bool, channelID, clientID, connec
 		return nil, fmt.Errorf("%s: %w", connectionID, database.ErrConnectionAlreadyExists)
 	}
 
-	if isPush {
-		//TODO(window9u): Currently, we set static server ID. we should handle this more safely.
-		raw, err := txn.First(tblConnections, idxConnTo, channelID, database.ServerID)
-		if err != nil {
-			return nil, fmt.Errorf("find connection by connectionID: %w", err)
-		}
-		if raw != nil {
-			return nil, fmt.Errorf("%s: %w", clientID, database.ErrPushConnectionExists)
-		}
-	}
-
 	newConn := &database.ConnectionInfo{
 		ID:                  connectionID,
 		ChannelID:           channelID,
 		IsConnectWithServer: true,
+		From:                database.MediaServerID,
+		To:                  clientID,
 		CreatedAt:           time.Now(),
-	}
-	if isPush {
-		newConn.From = clientID
-		newConn.To = database.ServerID
-	} else {
-		newConn.From = database.ServerID
-		newConn.To = clientID
 	}
 
 	if err := txn.Insert(tblConnections, newConn); err != nil {
@@ -210,7 +231,7 @@ func (d *DB) CreateClientConnectionInfo(channelID, from, to, connectionID string
 func (d *DB) FindUpstreamInfo(channelID string) (*database.ConnectionInfo, error) {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
-	raw, err := txn.First(tblConnections, idxConnTo, channelID, database.ServerID)
+	raw, err := txn.First(tblConnections, idxConnTo, channelID, database.MediaServerID)
 	if err != nil {
 		return nil, fmt.Errorf("find connection by connectionID: %w", err)
 	}

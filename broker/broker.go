@@ -15,6 +15,7 @@ type Topic int
 // Detail represents a message detail.
 type Detail string
 
+// Topic constants for message topics.
 const (
 	ClientSocket Topic = iota
 	ClientMessage
@@ -22,6 +23,7 @@ const (
 	Connection
 )
 
+// Detail constants for message details.
 const (
 	PUSH         Detail = "PUSH"
 	PULL         Detail = "PULL"

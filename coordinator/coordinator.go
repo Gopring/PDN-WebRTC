@@ -1,3 +1,4 @@
+// Package coordinator manages the WebRTC connections that Client to Media server and Client to Client.
 package coordinator
 
 import (
@@ -58,7 +59,7 @@ func (c *Coordinator) handlePush(event any) {
 	}
 
 	// 02. Create connection info
-	connInfo, err := c.database.CreateServerConnectionInfo(true, msg.ChannelID, msg.ClientID, msg.ConnectionID)
+	connInfo, err := c.database.CreatePushConnectionInfo(msg.ChannelID, msg.ClientID, msg.ConnectionID)
 	if err != nil {
 		log.Printf("error occurs in creating connection info %v", err)
 		return
@@ -87,7 +88,7 @@ func (c *Coordinator) handlePull(event any) {
 	}
 
 	// 02. Create connection info
-	connInfo, err := c.database.CreateServerConnectionInfo(false, msg.ChannelID, msg.ClientID, msg.ConnectionID)
+	connInfo, err := c.database.CreatePullConnectionInfo(msg.ChannelID, msg.ClientID, msg.ConnectionID)
 	if err != nil {
 		log.Printf("error occurs in creating connection info %v", err)
 		return
@@ -162,35 +163,19 @@ func (c *Coordinator) handleConnected(event any) {
 }
 
 // handleDisconnected handles the disconnected event. This event is about Media server to client
-func (c *Coordinator) handleDisconnected(event any) {
+func (c *Coordinator) handleDisconnected(_ any) {
 	// 01. Parse the event to message.Disconnected
-	//msg, ok := event.(message.Disconnected)
-	//if !ok {
-	//	log.Printf("error occurs in parsing disconnected message %v", event)
-	//	return
-	//}
 
-	//// 02. Find user info by channel id and user id
-	//userInfo, err := c.database.FindClientInfoByID(msg.ChannelID, msg.ClientID)
-	//if err != nil {
-	//	log.Printf("error occurs in finding user info by channel id and user id %v", err)
-	//	return
-	//}
+	// 02. Find user info by channel id and user id
 }
 
 // handleFailed handles the failed event. This event is about client to client
-func (c *Coordinator) handleFailed(event any) {
-	// 01. Parse the event to message.Failure
-	//msg, ok := event.(message.Failure)
-	//if !ok {
-	//	log.Printf("error occurs in parsing failed message %v", event)
-	//	return
-	//}
+func (c *Coordinator) handleFailed(_ any) {
+	//01. Parse the event to message.Failure
 
-	//// 02. Find user info by channel id and user id
-	//userInfo, err := c.database.FindClientInfoByID(msg.Channel
+	// 02. Find user info by channel id and user id
 }
 
-func (c *Coordinator) handleSucceed(event any) {
+func (c *Coordinator) handleSucceed(_ any) {
 
 }
