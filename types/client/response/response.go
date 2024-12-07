@@ -6,6 +6,8 @@ const (
 	ACTIVATE = "ACTIVATE"
 	FETCH    = "FETCH"
 	FORWARD  = "FORWARD"
+	CLOSED   = "CLOSED"
+	CLEAR    = "CLEAR"
 	SIGNAL   = "SIGNAL"
 )
 
@@ -24,6 +26,18 @@ type Forward struct {
 
 // Fetch is data type for server sent response to command user fetching
 type Fetch struct {
+	Type         string `json:"type"`
+	ConnectionID string `json:"connection_id"`
+}
+
+// Closed is data type for server sent response to command user closing
+type Closed struct {
+	Type         string `json:"type"`
+	ConnectionID string `json:"connection_id"`
+}
+
+// Clear is data type for server sent response to command user clearing
+type Clear struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 }

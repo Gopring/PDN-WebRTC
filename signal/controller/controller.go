@@ -30,19 +30,32 @@ func New(b *broker.Broker, db database.Database) *Controller {
 
 // Process handles HTTP requests.
 func (c *Controller) Process(conn *websocket.Conn) error {
+	// 01. Build the context for control response goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
 		cancel()
 	}()
+
+	// 02. Authenticate the connection
 	channelID, userID, err := c.authenticate(conn)
-	defer func() {
-		if err := c.database.DeleteClientInfoByID(channelID, userID); err != nil {
-			log.Printf("failed to delete user info: %v", err)
-		}
-	}()
 	if err != nil {
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
+
+	if err := c.broker.Publish(broker.Client, broker.ACTIVATE, message.Activate{
+		ChannelID: channelID,
+		ClientID:  userID,
+	}); err != nil {
+		return fmt.Errorf("failed to publish connected message: %w", err)
+	}
+	defer func() {
+		if err := c.broker.Publish(broker.Client, broker.DEACTIVATE, message.Deactivate{
+			ChannelID: channelID,
+			ClientID:  userID,
+		}); err != nil {
+			log.Printf("failed to publish left message: %v", err)
+		}
+	}()
 
 	go c.sendResponse(ctx, conn, channelID, userID)
 
@@ -54,6 +67,7 @@ func (c *Controller) Process(conn *websocket.Conn) error {
 
 // authenticate authenticates the connection.
 func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) {
+	// 01. Parse the request from the client
 	var req request.Common
 	if err := conn.ReadJSON(&req); err != nil {
 		return "", "", fmt.Errorf("failed to read authentication message: %w", err)
@@ -66,22 +80,18 @@ func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) 
 		return "", "", fmt.Errorf("failed to unmarshal activation payload: %w", err)
 	}
 
+	// 02. Authenticate the channel
 	channelInfo, err := c.database.FindChannelInfoByID(payload.ChannelID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to find channel info: %w", err)
 	}
 	if !channelInfo.Authenticate(payload.ChannelKey) {
 		return "", "", fmt.Errorf("invalid key: %s", payload.ChannelKey)
-
-	}
-
-	if err := c.database.CreateClientInfo(payload.ChannelID, payload.ClientID); err != nil {
-		return "", "", fmt.Errorf("failed to create user info: %w", err)
 	}
 
 	res := response.Activate{
 		Type:    response.ACTIVATE,
-		Message: "Connection established",
+		Message: "FetchFromPeer established",
 	}
 
 	if err := conn.WriteJSON(res); err != nil {
@@ -140,6 +150,12 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 		err = c.handleForward(req, channelID, userID)
 	case request.SIGNAL:
 		err = c.handleSignal(req, channelID, userID)
+	case request.CONNECTED:
+		err = c.handleConnected(req, channelID, userID)
+	case request.DISCONNECTED:
+		err = c.handleDisconnected(req, channelID, userID)
+	case request.FAILED:
+		err = c.handleFailed(req, channelID, userID)
 	default:
 		err = fmt.Errorf("invalid request type: %s", req.Type)
 	}
@@ -159,7 +175,7 @@ func (c *Controller) handlePush(req request.Common, channelID, userID string) er
 		ClientID:     userID,
 		SDP:          payload.SDP,
 	}
-	if err := c.broker.Publish(broker.ClientMessage, broker.PUSH, msg); err != nil {
+	if err := c.broker.Publish(broker.Client, broker.PUSH, msg); err != nil {
 		return fmt.Errorf("failed to publish push message: %w", err)
 	}
 	return nil
@@ -178,7 +194,7 @@ func (c *Controller) handlePull(req request.Common, channelID, userID string) er
 		ClientID:     userID,
 		SDP:          payload.SDP,
 	}
-	if err := c.broker.Publish(broker.ClientMessage, broker.PULL, msg); err != nil {
+	if err := c.broker.Publish(broker.Client, broker.PULL, msg); err != nil {
 		return fmt.Errorf("failed to publish pull message: %w", err)
 	}
 	return nil
@@ -236,6 +252,74 @@ func (c *Controller) handleForward(req request.Common, channelID, userID string)
 	}
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
 		return fmt.Errorf("failed to publish exchange message: %w", err)
+	}
+	return nil
+}
+
+// handleConnected handles the succeed event. succeed event means that a client has successfully
+// completed the connection with another client.
+func (c *Controller) handleConnected(req request.Common, channelID, userID string) error {
+	var payload request.Connected
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal succeed payload: %w", err)
+	}
+	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("failed to find connection info: %w", err)
+	}
+	if !connInfo.Authorize(channelID, userID) {
+		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
+	}
+
+	if err := c.broker.Publish(broker.Peer, broker.CONNECTED, message.Connected{
+		ConnectionID: payload.ConnectionID,
+	}); err != nil {
+		return fmt.Errorf("failed to publish succeed message: %w", err)
+	}
+	return nil
+}
+
+// handleFailed handles the failed event. failed event means that a client has failed to
+// complete the connection with another client.
+func (c *Controller) handleFailed(req request.Common, channelID, userID string) error {
+	var payload request.Failed
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal failed payload: %w", err)
+	}
+	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("failed to find connection info: %w", err)
+	}
+	if !connInfo.Authorize(channelID, userID) {
+		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
+	}
+
+	if err := c.broker.Publish(broker.Peer, broker.FAILED, message.Failed{
+		ConnectionID: payload.ConnectionID,
+	}); err != nil {
+		return fmt.Errorf("failed to publish failed message: %w", err)
+	}
+	return nil
+}
+
+// handleDisconnected handles the closed event. closed event means that a client has closed the connection.
+func (c *Controller) handleDisconnected(req request.Common, channelID, userID string) error {
+	var payload request.Disconnected
+	if err := json.Unmarshal(req.Payload, &payload); err != nil {
+		return fmt.Errorf("failed to unmarshal closed payload: %w", err)
+	}
+	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("failed to find connection info: %w", err)
+	}
+	if !connInfo.Authorize(channelID, userID) {
+		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
+	}
+
+	if err := c.broker.Publish(broker.Peer, broker.DISCONNECTED, message.Disconnected{
+		ConnectionID: payload.ConnectionID,
+	}); err != nil {
+		return fmt.Errorf("failed to publish closed message: %w", err)
 	}
 	return nil
 }

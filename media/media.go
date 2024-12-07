@@ -48,7 +48,7 @@ func New(b *broker.Broker) *Media {
 func (m *Media) Run() {
 	upEvent := m.broker.Subscribe(broker.Media, broker.UPSTREAM)
 	downEvent := m.broker.Subscribe(broker.Media, broker.DOWNSTREAM)
-	closureEvent := m.broker.Subscribe(broker.Media, broker.CLOSURE)
+	clearEvent := m.broker.Subscribe(broker.Media, broker.CLEAR)
 
 	for {
 		var err error
@@ -57,8 +57,8 @@ func (m *Media) Run() {
 			go m.handleUpstream(event)
 		case event := <-downEvent.Receive():
 			go m.handleDownstream(event)
-		case event := <-closureEvent.Receive():
-			go m.handleClosure(event)
+		case event := <-clearEvent.Receive():
+			go m.handleClear(event)
 		}
 		if err != nil {
 			log.Printf("Failed to handle event in Media: %v", err)
@@ -112,24 +112,25 @@ func (m *Media) handleDownstream(event any) {
 	}
 }
 
-// handleClosure handles a close event.
-func (m *Media) handleClosure(event any) {
-	closure, ok := event.(message.Closure)
+// handleClear handles a close event.
+func (m *Media) handleClear(event any) {
+	clr, ok := event.(message.Clear)
 	if !ok {
-		log.Printf("failed to cast event to Closure: %v", event)
+		log.Printf("failed to cast event to Closed: %v", event)
 		return
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	conn, ok := m.connections[closure.ConnectionID]
+	conn, ok := m.connections[clr.ConnectionID]
 	if !ok {
-		log.Printf("connection not found: %s", closure.ConnectionID)
+		log.Printf("connection not found: %s", clr.ConnectionID)
 		return
 	}
+	log.Printf("closing connection: %s", clr.ConnectionID)
 	if err := conn.Close(); err != nil {
-		log.Printf("failed to closure connection: %v", err)
+		log.Printf("failed to clr connection: %v", err)
 	}
-	delete(m.connections, closure.ConnectionID)
+	delete(m.connections, clr.ConnectionID)
 }
 
 // AddUpstream creates a new upstream connection and adds it to the channel.
@@ -232,7 +233,7 @@ func (m *Media) setDownstream(conn *webrtc.PeerConnection, streamID string) erro
 // publishStateChange publishes the state change of a connection.
 func (m *Media) publishStateChange(conn *webrtc.PeerConnection, connectionID string) {
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("Connection %s: ICE Connection State has changed to %s", connectionID, state.String())
+		//log.Printf("Peer %s: ICE Peer State has changed to %s", connectionID, state.String())
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
 			log.Printf("Connection %s: Connected", connectionID)

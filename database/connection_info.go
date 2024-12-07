@@ -10,12 +10,19 @@ const (
 	Connected
 )
 
+const (
+	PushToServer = iota
+	PullFromServer
+	PeerToPeer
+)
+
 // ConnectionInfo is a struct for WebRTC connection information.
 type ConnectionInfo struct {
 	ID          string
 	ChannelID   string
 	To          string
 	From        string
+	Type        int
 	Status      int
 	CreatedAt   time.Time
 	ConnectedAt time.Time
@@ -36,12 +43,17 @@ func (c *ConnectionInfo) GetCounterpart(clientID string) string {
 
 // IsUpstream checks if the connection is an upstream connection.
 func (c *ConnectionInfo) IsUpstream() bool {
-	return c.To == MediaServerID
+	return c.Type == PushToServer
+}
+
+// IsDownstream checks if the connection is an upstream connection.
+func (c *ConnectionInfo) IsDownstream() bool {
+	return c.Type == PullFromServer
 }
 
 // IsPeerConnection checks if the connection is a peer connection.
 func (c *ConnectionInfo) IsPeerConnection() bool {
-	return c.To != MediaServerID && c.From != MediaServerID
+	return c.Type == PeerToPeer
 }
 
 // DeepCopy creates a deep copy of the given ConnectionInfo.
@@ -52,6 +64,7 @@ func (c *ConnectionInfo) DeepCopy() *ConnectionInfo {
 		To:          c.To,
 		From:        c.From,
 		Status:      c.Status,
+		Type:        c.Type,
 		CreatedAt:   c.CreatedAt,
 		ConnectedAt: c.ConnectedAt,
 	}

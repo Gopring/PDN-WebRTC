@@ -5,11 +5,14 @@ import "encoding/json"
 
 // Constants for request types
 const (
-	ACTIVATE = "ACTIVATE"
-	PUSH     = "PUSH"
-	PULL     = "PULL"
-	FORWARD  = "FORWARD"
-	SIGNAL   = "SIGNAL"
+	ACTIVATE     = "ACTIVATE"
+	PUSH         = "PUSH"
+	PULL         = "PULL"
+	FORWARD      = "FORWARD"
+	SIGNAL       = "SIGNAL"
+	CONNECTED    = "CONNECTED"
+	DISCONNECTED = "DISCONNECTED"
+	FAILED       = "FAILED"
 )
 
 // Common is data type that must be implemented in all request
@@ -48,4 +51,19 @@ type Signal struct {
 	ConnectionID string `json:"connection_id"`
 	SignalType   string `json:"signal_type"`
 	SignalData   string `json:"signal_data"`
+}
+
+// Connected is data type for success response
+type Connected struct {
+	ConnectionID string `json:"connection_id"`
+}
+
+// Failed is data type for fail response
+type Failed struct {
+	ConnectionID string `json:"connection_id"`
+}
+
+// Disconnected is data type for disconnecting user
+type Disconnected struct {
+	ConnectionID string `json:"connection_id"`
 }

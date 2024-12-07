@@ -45,8 +45,9 @@ type Database interface {
 	FindChannelInfoByID(id string) (*ChannelInfo, error)
 
 	CreateClientInfo(channelID, clientID string) error
-	FindForwarderInfo(channelID string, to string, max int) (*ClientInfo, error)
-	UpdateClientInfo(channelID, clientID string, class int) (*ClientInfo, error)
+	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
+	FindForwarderInfo(channelID string, fetcherID string, max int) (*ClientInfo, error)
+	UpdateClientInfo(channelID, clientID string, class, fetchFrom int) (*ClientInfo, error)
 	DeleteClientInfoByID(channelID, clientID string) error
 
 	CreatePushConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
@@ -54,9 +55,9 @@ type Database interface {
 	CreatePeerConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
 	FindUpstreamInfo(channelID string) (*ConnectionInfo, error)
 	FindDownstreamInfo(channelID, to string) (*ConnectionInfo, error)
+	FindConnectionInfoByFrom(channelID, from string) ([]*ConnectionInfo, error)
+	FindConnectionInfoByTo(channelID, from string) ([]*ConnectionInfo, error)
 	FindConnectionInfoByID(ConnectionID string) (*ConnectionInfo, error)
-	CountClientsInChannel(channelID string) (int, error)
-	CountForwardingByID(channelID, from string) (int, error)
 	UpdateConnectionInfo(connectionID string, status int) (*ConnectionInfo, error)
 	DeleteConnectionInfoByID(connectionID string) error
 }

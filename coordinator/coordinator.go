@@ -2,6 +2,8 @@
 package coordinator
 
 import (
+	"errors"
+	"fmt"
 	"github.com/lithammer/shortuuid/v4"
 	"log"
 	"pdn/broker"
@@ -10,7 +12,11 @@ import (
 	"pdn/types/message"
 )
 
-const MaxForwardingNumber = 3
+const MaxForwardingNumber = 1
+
+var (
+	ErrNoForwarder = fmt.Errorf("no forwarder")
+)
 
 // Coordinator manages the WebRTC connections that Client to Media server and Client to Client.
 type Coordinator struct {
@@ -28,26 +34,115 @@ func New(b *broker.Broker, db database.Database) *Coordinator {
 
 // Run starts the Coordinator instance.
 func (c *Coordinator) Run() {
-	pushEvent := c.broker.Subscribe(broker.ClientMessage, broker.PUSH)
-	pullEvent := c.broker.Subscribe(broker.ClientMessage, broker.PULL)
-	connectedEvent := c.broker.Subscribe(broker.Media, broker.CONNECTED)
-	disconnectedEvent := c.broker.Subscribe(broker.Media, broker.DISCONNECTED)
-	failedEvent := c.broker.Subscribe(broker.Connection, broker.FAILED)
-	succeedEvent := c.broker.Subscribe(broker.Connection, broker.SUCCEED)
+	activateEvent := c.broker.Subscribe(broker.Client, broker.ACTIVATE)
+	deactivateEvent := c.broker.Subscribe(broker.Client, broker.DEACTIVATE)
+	pushEvent := c.broker.Subscribe(broker.Client, broker.PUSH)
+	pullEvent := c.broker.Subscribe(broker.Client, broker.PULL)
+	mediaConnectedEvent := c.broker.Subscribe(broker.Media, broker.CONNECTED)
+	mediaDisconnectedEvent := c.broker.Subscribe(broker.Media, broker.DISCONNECTED)
+	peerFailedEvent := c.broker.Subscribe(broker.Peer, broker.FAILED)
+	peerConnectedEvent := c.broker.Subscribe(broker.Peer, broker.CONNECTED)
+	peerDisconnectedEvent := c.broker.Subscribe(broker.Peer, broker.DISCONNECTED)
 	for {
 		select {
+		case event := <-activateEvent.Receive():
+			go c.handleActivate(event)
+		case event := <-deactivateEvent.Receive():
+			go c.handleDeactivate(event)
 		case event := <-pushEvent.Receive():
 			go c.handlePush(event)
 		case event := <-pullEvent.Receive():
 			go c.handlePull(event)
-		case event := <-connectedEvent.Receive():
-			go c.handleConnected(event)
-		case event := <-disconnectedEvent.Receive():
-			go c.handleDisconnected(event)
-		case event := <-failedEvent.Receive():
-			go c.handleFailed(event)
-		case event := <-succeedEvent.Receive():
-			go c.handleSucceed(event)
+		case event := <-mediaConnectedEvent.Receive():
+			go c.handleMediaConnected(event)
+		case event := <-mediaDisconnectedEvent.Receive():
+			go c.handleMediaDisconnected(event)
+		case event := <-peerFailedEvent.Receive():
+			go c.handlePeerFailed(event)
+		case event := <-peerConnectedEvent.Receive():
+			go c.handlePeerConnected(event)
+		case event := <-peerDisconnectedEvent.Receive():
+			go c.handlePeerDisconnected(event)
+		}
+	}
+}
+
+// handleActivate handles the activate event. activate event means that a client
+// requests to activate the connection.
+func (c *Coordinator) handleActivate(event any) {
+	msg, ok := event.(message.Activate)
+	if !ok {
+		log.Printf("error occurs in parsing activate message %v", event)
+		return
+	}
+
+	if err := c.database.CreateClientInfo(msg.ChannelID, msg.ClientID); err != nil {
+		log.Printf("error occurs in creating client info %v", err)
+		return
+	}
+}
+
+// handleDeactivate handles the deactivate event. deactivate event means that a client
+// left the socket connection.
+func (c *Coordinator) handleDeactivate(event any) {
+	msg, ok := event.(message.Deactivate)
+	if !ok {
+		log.Printf("error occurs in parsing activate message %v", event)
+		return
+	}
+
+	forwards, err := c.database.FindConnectionInfoByFrom(msg.ChannelID, msg.ClientID)
+	if err != nil {
+		log.Printf("error occurs in finding connection info by from %v", err)
+		return
+	}
+
+	for _, forward := range forwards {
+		if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
+			Type:         response.CLOSED,
+			ConnectionID: forward.ID,
+		}); err != nil {
+			log.Printf("error occurs in publishing close message %v", err)
+			return
+		}
+		if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
+			log.Printf("error occurs in deleting connection info %v", err)
+			return
+		}
+	}
+
+	fetches, err := c.database.FindConnectionInfoByTo(msg.ChannelID, msg.ClientID)
+	for _, fetch := range fetches {
+		switch fetch.Type {
+		case database.PushToServer:
+			if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
+				ConnectionID: fetch.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
+				return
+			}
+		case database.PullFromServer:
+			if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
+				ConnectionID: fetch.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
+				return
+			}
+		case database.PeerToPeer:
+			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
+				Type:         response.CLEAR,
+				ConnectionID: fetch.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
+				return
+			}
+		default:
+			panic("unhandled default case")
+		}
+
+		if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
+			log.Printf("error occurs in deleting connection info %v", err)
+			return
 		}
 	}
 }
@@ -67,7 +162,7 @@ func (c *Coordinator) handlePush(event any) {
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(msg.ChannelID, msg.ClientID, database.Publisher); err != nil {
+	if _, err := c.database.UpdateClientInfo(msg.ChannelID, msg.ClientID, database.Publisher, database.FromServer); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
@@ -115,8 +210,8 @@ func (c *Coordinator) handlePull(event any) {
 	}
 }
 
-// handleConnected handles the connected event. This event is about Media server to client
-func (c *Coordinator) handleConnected(event any) {
+// handleMediaConnected handles the connected event. This event is about Media server to client
+func (c *Coordinator) handleMediaConnected(event any) {
 	msg, ok := event.(message.Connected)
 	if !ok {
 		log.Printf("error occurs in parsing connected message %v", event)
@@ -133,50 +228,25 @@ func (c *Coordinator) handleConnected(event any) {
 		return
 	}
 
-	clientInfo, err := c.database.FindForwarderInfo(connInfo.ChannelID, connInfo.To, MaxForwardingNumber)
-	if err != nil {
-		log.Printf("error occurs in finding user info to forward %v", err)
-		return
-	}
-	if clientInfo == nil {
-		log.Printf("no user info to forward")
-		return
-	}
-
-	peerConn, err := c.database.CreatePeerConnectionInfo(connInfo.ChannelID, clientInfo.ID, connInfo.To, shortuuid.New())
-	if err != nil {
-		log.Printf("error occurs in creating connection info between two clients %v", err)
-		return
-	}
-
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(connInfo.ChannelID+connInfo.To), response.Fetch{
-		Type:         response.FETCH,
-		ConnectionID: peerConn.ID,
-	}); err != nil {
-		log.Printf("error occurs in publishing forward message %v", err)
+	if err := c.balance(connInfo.ChannelID, connInfo.To); err != nil && !errors.Is(err, ErrNoForwarder) {
+		log.Printf("error occurs in balancing %v", err)
 		return
 	}
 }
 
-// handleDisconnected handles the disconnected event. This event is about Media server to client
-func (c *Coordinator) handleDisconnected(event any) {
+// handleMediaDisconnected handles the disconnected event. This event is about Media server to client
+func (c *Coordinator) handleMediaDisconnected(event any) {
 	// 01. Parse the event to message.Disconnected
 	msg, ok := event.(message.Disconnected)
 	if !ok {
 		log.Printf("error occurs in parsing disconnected message %v", event)
 		return
 	}
-	// 02. Find user info by connection id
-	if err := c.database.DeleteConnectionInfoByID(msg.ConnectionID); err != nil {
-		log.Printf("error occurs in finding connection info by connection id %v", err)
-		return
-	}
-
-	// We should also delete fetcher connection info if connection was forwarder
+	log.Printf("connection  %s disconnected", msg.ConnectionID)
 }
 
-// handleFailed handles the failed event. This event is about client to client
-func (c *Coordinator) handleFailed(event any) {
+// handlePeerFailed handles the failed event. This event is about client to client
+func (c *Coordinator) handlePeerFailed(event any) {
 	msg, ok := event.(message.Failed)
 	if !ok {
 		log.Printf("error occurs in parsing failed message %v", event)
@@ -189,22 +259,30 @@ func (c *Coordinator) handleFailed(event any) {
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.From, database.Fetcher); err != nil {
+	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.From, database.Fetcher, database.FromServer); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.To, database.Fetcher); err != nil {
+	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.To, database.Fetcher, database.FromServer); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
 
-	// coordinate again
+	if err := c.balance(connInfo.ChannelID, connInfo.To); err != nil && !errors.Is(err, ErrNoForwarder) {
+		log.Printf("error occurs in balancing %v", err)
+		return
+	}
+
+	if err := c.balance(connInfo.ChannelID, connInfo.From); err != nil && !errors.Is(err, ErrNoForwarder) {
+		log.Printf("error occurs in balancing %v", err)
+		return
+	}
 }
 
-// handleSucceed handles the succeed event. This event is about client to client
-func (c *Coordinator) handleSucceed(event any) {
-	msg, ok := event.(message.Succeed)
+// handlePeerConnected handles the succeed event. This event is about client to client
+func (c *Coordinator) handlePeerConnected(event any) {
+	msg, ok := event.(message.Connected)
 	if !ok {
 		log.Printf("error occurs in parsing failed message %v", event)
 		return
@@ -216,16 +294,62 @@ func (c *Coordinator) handleSucceed(event any) {
 		return
 	}
 
+	if _, err := c.database.UpdateClientInfo(peerConn.ChannelID, peerConn.To, database.Fetcher, database.FromPeer); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+		return
+	}
+
 	serverConn, err := c.database.FindDownstreamInfo(peerConn.ChannelID, peerConn.To)
 	if err != nil {
 		log.Printf("error occurs in finding downstream info %v", err)
 		return
 	}
 
-	if err := c.broker.Publish(broker.Media, broker.CLOSURE, message.Closure{
+	if err := c.database.DeleteConnectionInfoByID(serverConn.ID); err != nil {
+		log.Printf("error occurs in deleting connection info %v", err)
+		return
+	}
+
+	if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
 		ConnectionID: serverConn.ID,
 	}); err != nil {
 		log.Printf("error occurs in publishing closure message %v", err)
 		return
 	}
+}
+
+// handlePeerDisconnected handles the succeed event. This event is about client to client
+func (c *Coordinator) handlePeerDisconnected(event any) {
+	msg, ok := event.(message.Disconnected)
+	if !ok {
+		log.Printf("error occurs in parsing failed message %v", event)
+		return
+	}
+	if err := c.database.DeleteConnectionInfoByID(msg.ConnectionID); err != nil {
+		log.Printf("error occurs in updating connection info %v", err)
+		return
+	}
+}
+
+func (c *Coordinator) balance(channelID, fetcherID string) error {
+	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, MaxForwardingNumber)
+	if err != nil {
+		return fmt.Errorf("error occurs in finding user info to forward %v", err)
+	}
+	if forwarderInfo == nil {
+		return ErrNoForwarder
+	}
+
+	peerConn, err := c.database.CreatePeerConnectionInfo(channelID, forwarderInfo.ID, fetcherID, shortuuid.New())
+	if err != nil {
+		return fmt.Errorf("error occurs in creating peer connection info %v", err)
+	}
+
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+fetcherID), response.Fetch{
+		Type:         response.FETCH,
+		ConnectionID: peerConn.ID,
+	}); err != nil {
+		return fmt.Errorf("error occurs in publishing fetch message %v", err)
+	}
+	return nil
 }
