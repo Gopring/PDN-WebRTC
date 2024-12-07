@@ -142,7 +142,6 @@ func (c *Coordinator) handleConnected(event any) {
 		log.Printf("no user info to forward")
 		return
 	}
-	log.Printf("forwarding to %v", clientInfo)
 
 	peerConn, err := c.database.CreatePeerConnectionInfo(connInfo.ChannelID, clientInfo.ID, connInfo.To, shortuuid.New())
 	if err != nil {

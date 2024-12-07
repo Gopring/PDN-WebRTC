@@ -138,8 +138,8 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 		err = c.handlePull(req, channelID, userID)
 	case request.FORWARD:
 		err = c.handleForward(req, channelID, userID)
-	case request.EXCHANGE:
-		err = c.handleExchange(req, channelID, userID)
+	case request.SIGNAL:
+		err = c.handleSignal(req, channelID, userID)
 	default:
 		err = fmt.Errorf("invalid request type: %s", req.Type)
 	}
@@ -184,12 +184,12 @@ func (c *Controller) handlePull(req request.Common, channelID, userID string) er
 	return nil
 }
 
-// handleExchange handles the exchange event. exchange event means that a client will exchange SDP or
+// handleSignal handles the exchange event. exchange event means that a client will exchange SDP or
 // candidate with another client.
-func (c *Controller) handleExchange(req request.Common, channelID, userID string) error {
-	var payload request.Exchange
+func (c *Controller) handleSignal(req request.Common, channelID, userID string) error {
+	var payload request.Signal
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal exchange payload: %w", err)
+		return fmt.Errorf("failed to unmarshal signal payload: %w", err)
 	}
 	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
 	if err != nil {
@@ -201,10 +201,11 @@ func (c *Controller) handleExchange(req request.Common, channelID, userID string
 
 	counterpart := connInfo.GetCounterpart(userID)
 
-	msg := response.Exchange{
+	msg := response.Signal{
+		Type:         response.SIGNAL,
 		ConnectionID: payload.ConnectionID,
-		Type:         payload.Type,
-		Data:         payload.Data,
+		SignalType:   payload.SignalType,
+		SignalData:   payload.SignalData,
 	}
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
 		return fmt.Errorf("failed to publish exchange message: %w", err)
@@ -214,7 +215,7 @@ func (c *Controller) handleExchange(req request.Common, channelID, userID string
 
 // handleForward handles the forward event. forward event means that a client requests
 func (c *Controller) handleForward(req request.Common, channelID, userID string) error {
-	var payload request.Exchange
+	var payload request.Forward
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal exchange payload: %w", err)
 	}
@@ -229,9 +230,9 @@ func (c *Controller) handleForward(req request.Common, channelID, userID string)
 	counterpart := connInfo.GetCounterpart(userID)
 
 	msg := response.Forward{
+		Type:         response.FORWARD,
 		ConnectionID: payload.ConnectionID,
-		Type:         payload.Type,
-		SDP:          payload.Data,
+		SDP:          payload.SDP,
 	}
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
 		return fmt.Errorf("failed to publish exchange message: %w", err)

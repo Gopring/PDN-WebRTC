@@ -9,7 +9,7 @@ const (
 	PUSH     = "PUSH"
 	PULL     = "PULL"
 	FORWARD  = "FORWARD"
-	EXCHANGE = "EXCHANGE"
+	SIGNAL   = "SIGNAL"
 )
 
 // Common is data type that must be implemented in all request
@@ -37,9 +37,15 @@ type Pull struct {
 	SDP          string `json:"sdp"`
 }
 
-// Exchange is data type for exchanging SDP
-type Exchange struct {
+// Forward is data type for push stream
+type Forward struct {
 	ConnectionID string `json:"connection_id"`
-	Type         string `json:"type"`
-	Data         string `json:"data"`
+	SDP          string `json:"sdp"`
+}
+
+// Signal is data type for exchanging SDP
+type Signal struct {
+	ConnectionID string `json:"connection_id"`
+	SignalType   string `json:"signal_type"`
+	SignalData   string `json:"signal_data"`
 }

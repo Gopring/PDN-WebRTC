@@ -110,7 +110,6 @@ func (d *DB) FindForwarderInfo(channelID string, fetcher string, max int) (*data
 			break
 		}
 		info := raw.(*database.ClientInfo)
-		log.Printf("info: %v", info)
 		if !info.CanForward() || info.ID == fetcher {
 			continue
 		}

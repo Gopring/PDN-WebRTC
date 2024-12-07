@@ -5,7 +5,8 @@ package response
 const (
 	ACTIVATE = "ACTIVATE"
 	FETCH    = "FETCH"
-	EXCHANGE = "EXCHANGE"
+	FORWARD  = "FORWARD"
+	SIGNAL   = "SIGNAL"
 )
 
 // Activate is data type for activating user
@@ -27,10 +28,10 @@ type Fetch struct {
 	ConnectionID string `json:"connection_id"`
 }
 
-// Exchange is data type for exchanging SDP
-type Exchange struct {
+// Signal is data type for exchanging SDP
+type Signal struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
-	DataType     string `json:"data_type"`
-	Data         string `json:"data"`
+	SignalType   string `json:"signal_type"`
+	SignalData   string `json:"signal_data"`
 }

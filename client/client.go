@@ -145,7 +145,7 @@ package client
 //
 //	// 6. Set the server's SDP answer as the remote description for broadcasting
 //	if err = conn.SetRemoteDescription(webrtc.SessionDescription{
-//		Type: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
+//		SignalType: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
 //		return err
 //	}
 //
@@ -178,7 +178,7 @@ package client
 //	}
 //	// 5. Set the server's SDP answer as the remote description for broadcasting
 //	if err = conn.SetRemoteDescription(webrtc.SessionDescription{
-//		Type: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
+//		SignalType: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
 //		return err
 //	}
 //	return nil
@@ -214,7 +214,7 @@ package client
 //	}
 //	// 5. Set the server's SDP answer as the remote description for broadcasting
 //	if err = conn.SetRemoteDescription(webrtc.SessionDescription{
-//		Type: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
+//		SignalType: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
 //		return err
 //	}
 //	return nil
@@ -264,7 +264,7 @@ package client
 //	}
 //	// 5. Set the server's SDP answer as the remote description for broadcasting
 //	if err = conn.SetRemoteDescription(webrtc.SessionDescription{
-//		Type: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
+//		SignalType: webrtc.SDPTypeAnswer, SDP: remoteSDP}); err != nil {
 //		return err
 //	}
 //	return nil
@@ -284,7 +284,7 @@ package client
 //
 //	// 2. Create an SDP answer to start broadcasting
 //	if err := conn.SetRemoteDescription(webrtc.SessionDescription{
-//		Type: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
+//		SignalType: webrtc.SDPTypeOffer, SDP: offer}); err != nil {
 //		return err
 //	}
 //	answer, err := conn.CreateAnswer(&webrtc.AnswerOptions{})
