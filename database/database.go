@@ -55,7 +55,8 @@ type Database interface {
 	FindUpstreamInfo(channelID string) (*ConnectionInfo, error)
 	FindDownstreamInfo(channelID, to string) (*ConnectionInfo, error)
 	FindConnectionInfoByID(ConnectionID string) (*ConnectionInfo, error)
-	FindForwardingNumberByID(channelID, from string) (int, error)
+	CountClientsInChannel(channelID string) (int, error)
+	CountForwardingByID(channelID, from string) (int, error)
 	UpdateConnectionInfo(connectionID string, status int) (*ConnectionInfo, error)
 	DeleteConnectionInfoByID(connectionID string) error
 }

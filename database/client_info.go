@@ -26,7 +26,7 @@ type ClientInfo struct {
 
 // CanForward returns whether the client can forward the stream.
 func (u *ClientInfo) CanForward() bool {
-	return u.Class != Publisher && u.Class != Fetcher
+	return u.Class == Candidate || u.Class == Forwarder
 }
 
 // DeepCopy creates a deep copy of the given ClientInfo.

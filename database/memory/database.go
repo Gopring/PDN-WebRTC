@@ -110,10 +110,11 @@ func (d *DB) FindForwarderInfo(channelID string, fetcher string, max int) (*data
 			break
 		}
 		info := raw.(*database.ClientInfo)
-		if !info.CanForward() && info.ID == fetcher {
+		log.Printf("info: %v", info)
+		if !info.CanForward() || info.ID == fetcher {
 			continue
 		}
-		if num, err := d.FindForwardingNumberByID(channelID, info.ID); err != nil {
+		if num, err := d.CountForwardingByID(channelID, info.ID); err != nil {
 			return nil, fmt.Errorf("find forwarding number: %w", err)
 		} else if num < max {
 			return info.DeepCopy(), nil
@@ -139,6 +140,7 @@ func (d *DB) UpdateClientInfo(channelID, clientID string, class int) (*database.
 	if err := txn.Insert(tblClients, info); err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
+	txn.Commit()
 	return info, nil
 }
 
@@ -156,6 +158,7 @@ func (d *DB) DeleteClientInfoByID(channelID, clientID string) error {
 	if err := txn.Delete(tblClients, raw); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
+	txn.Commit()
 	return nil
 }
 
@@ -252,7 +255,7 @@ func (d *DB) CreatePeerConnectionInfo(channelID, from, to, connectionID string) 
 
 // FindUpstreamInfo finds an upstream connection by its channel ID.
 func (d *DB) FindUpstreamInfo(channelID string) (*database.ConnectionInfo, error) {
-	txn := d.db.Txn(true)
+	txn := d.db.Txn(false)
 	defer txn.Abort()
 	raw, err := txn.First(tblConnections, idxConnTo, channelID, database.MediaServerID)
 	if err != nil {
@@ -266,7 +269,7 @@ func (d *DB) FindUpstreamInfo(channelID string) (*database.ConnectionInfo, error
 
 // FindDownstreamInfo finds a downstream connection by its channel ID and client ID.
 func (d *DB) FindDownstreamInfo(channelID, to string) (*database.ConnectionInfo, error) {
-	txn := d.db.Txn(true)
+	txn := d.db.Txn(false)
 	defer txn.Abort()
 	raw, err := txn.First(tblConnections, idxConnTo, channelID, to)
 	if err != nil {
@@ -292,7 +295,27 @@ func (d *DB) FindConnectionInfoByID(ConnectionID string) (*database.ConnectionIn
 	return raw.(*database.ConnectionInfo).DeepCopy(), nil
 }
 
-func (d *DB) FindForwardingNumberByID(channelID, from string) (int, error) {
+// CountClientsInChannel finds the number of clients in a channel.
+func (d *DB) CountClientsInChannel(channelID string) (int, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(tblClients, idxClientChannelID, channelID)
+	if err != nil {
+		return 0, fmt.Errorf("find user by username: %w", err)
+	}
+	count := 0
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		count++
+	}
+	return count, nil
+}
+
+// CountForwardingByID finds the number of forwarding connections by the client ID.
+func (d *DB) CountForwardingByID(channelID, from string) (int, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
 	iter, err := txn.Get(tblConnections, idxConnFrom, channelID, from)

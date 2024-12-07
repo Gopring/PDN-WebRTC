@@ -228,10 +228,10 @@ func (c *Controller) handleForward(req request.Common, channelID, userID string)
 
 	counterpart := connInfo.GetCounterpart(userID)
 
-	msg := response.Exchange{
+	msg := response.Forward{
 		ConnectionID: payload.ConnectionID,
 		Type:         payload.Type,
-		Data:         payload.Data,
+		SDP:          payload.Data,
 	}
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
 		return fmt.Errorf("failed to publish exchange message: %w", err)

@@ -4,7 +4,6 @@ package response
 // Constants for response types
 const (
 	ACTIVATE = "ACTIVATE"
-	FORWARD  = "FORWARD"
 	FETCH    = "FETCH"
 	EXCHANGE = "EXCHANGE"
 )

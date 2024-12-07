@@ -232,26 +232,26 @@ func (m *Media) setDownstream(conn *webrtc.PeerConnection, streamID string) erro
 // publishStateChange publishes the state change of a connection.
 func (m *Media) publishStateChange(conn *webrtc.PeerConnection, connectionID string) {
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("Channel %s: ICE Connection State has changed to %s", connectionID, state.String())
+		log.Printf("Connection %s: ICE Connection State has changed to %s", connectionID, state.String())
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
-			log.Printf("Channel %s: Connected", connectionID)
+			log.Printf("Connection %s: Connected", connectionID)
 			if err := m.broker.Publish(broker.Media, broker.CONNECTED, message.Connected{
 				ConnectionID: connectionID,
 			}); err != nil {
 				log.Printf("failed to publish connected message: %v", err)
 			}
 		case webrtc.PeerConnectionStateClosed:
-			log.Printf("Channel %s: Closed", connectionID)
+			log.Printf("Connection %s: Closed", connectionID)
 			if err := m.broker.Publish(broker.Media, broker.DISCONNECTED, message.Disconnected{
 				ConnectionID: connectionID,
 			}); err != nil {
 				log.Printf("failed to publish disconnected message: %v", err)
 			}
 		case webrtc.PeerConnectionStateDisconnected:
-			log.Printf("Channel %s: Disconnected", connectionID)
+			log.Printf("Connection %s: Disconnected", connectionID)
 		case webrtc.PeerConnectionStateFailed:
-			log.Printf("Channel %s: Failed", connectionID)
+			log.Printf("Connection %s: Failed", connectionID)
 		default:
 		}
 	})
