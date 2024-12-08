@@ -44,8 +44,8 @@ func New(b *broker.Broker) *Media {
 	}
 }
 
-// Run starts the Media instance.
-func (m *Media) Run() {
+// Start starts the Media instance.
+func (m *Media) Start() {
 	upEvent := m.broker.Subscribe(broker.Media, broker.UPSTREAM)
 	downEvent := m.broker.Subscribe(broker.Media, broker.DOWNSTREAM)
 	clearEvent := m.broker.Subscribe(broker.Media, broker.CLEAR)

@@ -12,28 +12,28 @@ import (
 	"pdn/types/message"
 )
 
-const MaxForwardingNumber = 1
-
 var (
 	ErrNoForwarder = fmt.Errorf("no forwarder")
 )
 
 // Coordinator manages the WebRTC connections that Client to Media server and Client to Client.
 type Coordinator struct {
+	config   Config
 	broker   *broker.Broker
 	database database.Database
 }
 
 // New creates a new instance of Coordinator.
-func New(b *broker.Broker, db database.Database) *Coordinator {
+func New(c Config, b *broker.Broker, db database.Database) *Coordinator {
 	return &Coordinator{
+		config:   c,
 		broker:   b,
 		database: db,
 	}
 }
 
-// Run starts the Coordinator instance.
-func (c *Coordinator) Run() {
+// Start starts the Coordinator instance.
+func (c *Coordinator) Start() {
 	activateEvent := c.broker.Subscribe(broker.Client, broker.ACTIVATE)
 	deactivateEvent := c.broker.Subscribe(broker.Client, broker.DEACTIVATE)
 	pushEvent := c.broker.Subscribe(broker.Client, broker.PUSH)
@@ -332,7 +332,7 @@ func (c *Coordinator) handlePeerDisconnected(event any) {
 }
 
 func (c *Coordinator) balance(channelID, fetcherID string) error {
-	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, MaxForwardingNumber)
+	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxForwardingNumber)
 	if err != nil {
 		return fmt.Errorf("error occurs in finding user info to forward %v", err)
 	}

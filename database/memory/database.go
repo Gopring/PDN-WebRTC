@@ -15,7 +15,7 @@ type DB struct {
 }
 
 // New creates a new memory-backed database.
-func New(setDefaultChannel bool) *DB {
+func New(config database.Config) *DB {
 	db, err := memdb.NewMemDB(schema)
 	if err != nil {
 		panic(err)
@@ -23,7 +23,7 @@ func New(setDefaultChannel bool) *DB {
 	newDB := &DB{
 		db: db,
 	}
-	if setDefaultChannel {
+	if config.SetDefaultChannel {
 		if err := newDB.EnsureDefaultChannelInfo(database.DefaultChannelID, database.DefaultChannelKey); err != nil {
 			panic(err)
 		}
