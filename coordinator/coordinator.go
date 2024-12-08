@@ -152,6 +152,11 @@ func (c *Coordinator) handleDeactivate(event any) {
 			return
 		}
 	}
+
+	if err := c.database.DeleteClientInfoByID(msg.ChannelID, msg.ClientID); err != nil {
+		log.Printf("error occurs in deleting client info %v", err)
+		return
+	}
 }
 
 // handlePush handles the push event. push event means that a client requests
@@ -169,7 +174,7 @@ func (c *Coordinator) handlePush(event any) {
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(msg.ChannelID, msg.ClientID, database.Publisher, database.FromServer); err != nil {
+	if _, err := c.database.UpdateClientInfo(msg.ChannelID, msg.ClientID, database.Publisher); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
@@ -241,15 +246,17 @@ func (c *Coordinator) handleMediaConnected(event any) {
 	}
 }
 
-// handleMediaDisconnected handles the disconnected event. This event is about Media server to client
-func (c *Coordinator) handleMediaDisconnected(event any) {
+// handleMediaDisconnected handles the disconnected event. This event is about Media server to client.
+// Currently, When client disconnected, we got disconnected event from deactivation event in Signal server first.
+// And Signal server will notify to Media server to close the connection. So we don't need to handle this event now.
+// But if we consider that signal disconnected but media server still connected, we should think it again.
+func (c *Coordinator) handleMediaDisconnected(_ any) {
 	// 01. Parse the event to message.Disconnected
-	msg, ok := event.(message.Disconnected)
-	if !ok {
-		log.Printf("error occurs in parsing disconnected message %v", event)
-		return
-	}
-	log.Printf("connection  %s disconnected", msg.ConnectionID)
+	//msg, ok := event.(message.Disconnected)
+	//if !ok {
+	//	log.Printf("error occurs in parsing disconnected message %v", event)
+	//	return
+	//}
 }
 
 // handlePeerFailed handles the failed event. This event is about client to client
@@ -266,12 +273,12 @@ func (c *Coordinator) handlePeerFailed(event any) {
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.From, database.Fetcher, database.FromServer); err != nil {
+	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.From, database.Fetcher); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.To, database.Fetcher, database.FromServer); err != nil {
+	if _, err := c.database.UpdateClientInfo(connInfo.ChannelID, connInfo.To, database.Fetcher); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
@@ -301,7 +308,7 @@ func (c *Coordinator) handlePeerConnected(event any) {
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(peerConn.ChannelID, peerConn.To, database.Fetcher, database.FromPeer); err != nil {
+	if _, err := c.database.UpdateClientInfo(peerConn.ChannelID, peerConn.To, database.Fetcher); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 		return
 	}

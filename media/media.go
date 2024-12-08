@@ -244,11 +244,11 @@ func (m *Media) publishStateChange(conn *webrtc.PeerConnection, connectionID str
 			}
 		case webrtc.PeerConnectionStateClosed:
 			log.Printf("Media: connection %s: Closed", connectionID)
-			if err := m.broker.Publish(broker.Media, broker.DISCONNECTED, message.Disconnected{
-				ConnectionID: connectionID,
-			}); err != nil {
-				log.Printf("failed to publish disconnected message: %v", err)
-			}
+			//if err := m.broker.Publish(broker.Media, broker.DISCONNECTED, message.Disconnected{
+			//	ConnectionID: connectionID,
+			//}); err != nil {
+			//	log.Printf("failed to publish disconnected message: %v", err)
+			//}
 		case webrtc.PeerConnectionStateDisconnected:
 			log.Printf("Media: connection %s: Disconnected", connectionID)
 		case webrtc.PeerConnectionStateFailed:

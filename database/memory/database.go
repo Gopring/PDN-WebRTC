@@ -83,11 +83,10 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	}
 
 	info := &database.ClientInfo{
-		ChannelID:  channelID,
-		ID:         clientID,
-		Class:      database.Candidate,
-		ForwardNum: 0,
-		CreatedAt:  time.Now(),
+		ChannelID: channelID,
+		ID:        clientID,
+		Class:     database.Candidate,
+		CreatedAt: time.Now(),
 	}
 	if err := txn.Insert(tblClients, info); err != nil {
 		return fmt.Errorf("insert user: %w", err)
@@ -119,22 +118,60 @@ func (d *DB) FindForwarderInfo(channelID string, fetcher string, max int) (*data
 		return nil, fmt.Errorf("find user by username: %w", err)
 	}
 
+	// TODO(window9u): We should implement a better algorithm to find the forwarder. This is a naive implementation and
+	// makes (N+1) queries to the database.
 	for {
 		raw := iter.Next()
 		if raw == nil {
 			break
 		}
-		info := raw.(*database.ClientInfo)
-		if !info.CanForward() || info.ID == fetcher || !info.FetchFromServer() || info.ForwardNum > max {
+		candidate := raw.(*database.ClientInfo)
+		if !candidate.CanForward() || candidate.ID == fetcher {
 			continue
 		}
-		return info.DeepCopy(), nil
+
+		// Forward should bee pull connection by server.
+		r, err := txn.First(tblConnections, idxConnTo, channelID, candidate.ID)
+		if err != nil {
+			return nil, fmt.Errorf("find connection by connectionID: %w", err)
+		} else if r == nil {
+			continue
+		}
+
+		conn := r.(*database.ConnectionInfo).DeepCopy()
+		if conn == nil || conn.IsPeerConnection() {
+			continue
+		}
+
+		// Forwarder number should be less than max.
+
+		it, err := txn.Get(tblConnections, idxConnFrom, channelID, candidate.ID)
+		if err != nil {
+			return nil, fmt.Errorf("find connection by connectionID: %w", err)
+		}
+		count := 0
+		for {
+			r := it.Next()
+			if r == nil {
+				break
+			}
+			count++
+			if count > max {
+				break
+			}
+		}
+
+		if count > max {
+			continue
+		}
+
+		return candidate.DeepCopy(), nil
 	}
 	return nil, nil
 }
 
 // UpdateClientInfo updates the user class.
-func (d *DB) UpdateClientInfo(channelID, clientID string, class, from int) (*database.ClientInfo, error) {
+func (d *DB) UpdateClientInfo(channelID, clientID string, class int) (*database.ClientInfo, error) {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
 	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
@@ -146,7 +183,6 @@ func (d *DB) UpdateClientInfo(channelID, clientID string, class, from int) (*dat
 	}
 	info := raw.(*database.ClientInfo).DeepCopy()
 	info.Class = class
-	info.FetchFrom = from
 	if err := txn.Insert(tblClients, info); err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}

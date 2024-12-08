@@ -47,7 +47,7 @@ type Database interface {
 	CreateClientInfo(channelID, clientID string) error
 	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
 	FindForwarderInfo(channelID string, fetcherID string, max int) (*ClientInfo, error)
-	UpdateClientInfo(channelID, clientID string, class, fetchFrom int) (*ClientInfo, error)
+	UpdateClientInfo(channelID, clientID string, class int) (*ClientInfo, error)
 	DeleteClientInfoByID(channelID, clientID string) error
 
 	CreatePushConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
