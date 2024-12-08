@@ -83,14 +83,19 @@ func (c *Coordinator) handleActivate(event any) {
 }
 
 // handleDeactivate handles the deactivate event. deactivate event means that a client
-// left the socket connection.
+// left the socket connection. We implemented this as client left and media connection will be closed too.
+// Because the WebRTC connection doesn't know when disconnected, it is temporal issue or not. So we decided to
+// consider socket connection is single truth of the client connection.
 func (c *Coordinator) handleDeactivate(event any) {
+	// 01. Parse the event to message.Deactivate
 	msg, ok := event.(message.Deactivate)
 	if !ok {
 		log.Printf("error occurs in parsing activate message %v", event)
 		return
 	}
 
+	// 02. Find forwarding peer connections. Because the fetcher don't know the forwarder left or just temporal issue.
+	// So we need to notify the fetcher that the forwarder left. And pull again.
 	forwards, err := c.database.FindConnectionInfoByFrom(msg.ChannelID, msg.ClientID)
 	if err != nil {
 		log.Printf("error occurs in finding connection info by from %v", err)
@@ -111,6 +116,8 @@ func (c *Coordinator) handleDeactivate(event any) {
 		}
 	}
 
+	// 03. Find fetching connections. Because the forwarder don't know the fetcher left or just temporal issue.
+	// So we need to notify the forwarder that the fetcher left. Then Forwarder can clear the forwarding connection.
 	fetches, err := c.database.FindConnectionInfoByTo(msg.ChannelID, msg.ClientID)
 	for _, fetch := range fetches {
 		switch fetch.Type {
