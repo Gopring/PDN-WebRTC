@@ -23,10 +23,11 @@ type Controller struct {
 }
 
 // New creates a new instance of Controller.
-func New(b *broker.Broker, db database.Database) *Controller {
+func New(b *broker.Broker, db database.Database, m *metric.Metrics) *Controller {
 	return &Controller{
 		broker:   b,
 		database: db,
+		metric:   m,
 	}
 }
 

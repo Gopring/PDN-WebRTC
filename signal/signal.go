@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"pdn/broker"
 	"pdn/database"
+	"pdn/metric"
 	"pdn/signal/controller"
 	"pdn/signal/handler"
 	"time"
@@ -19,8 +20,8 @@ type Signal struct {
 }
 
 // New creates a new instance of Signal.
-func New(config Config, db database.Database, brk *broker.Broker) *Signal {
-	con := controller.New(brk, db)
+func New(config Config, db database.Database, brk *broker.Broker, m *metric.Metrics) *Signal {
+	con := controller.New(brk, db, m)
 	srv := &http.Server{
 		Addr:        fmt.Sprintf(":%d", config.Port),
 		ReadTimeout: 2 * time.Second,
