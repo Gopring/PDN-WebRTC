@@ -43,7 +43,6 @@ func New(config Config) *PDN {
 
 // Start runs the signal server and metrics server.
 func (p *PDN) Start() error {
-
 	go p.metric.Start()
 	go p.media.Start()
 	go p.coordinator.Start()

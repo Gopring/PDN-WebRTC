@@ -123,12 +123,10 @@ func (m *Metrics) Start() {
 	}
 
 	go m.UpdateSystemMetrics()
-	go func() {
-		log.Printf("Starting metrics server on port %d at path %s", m.config.Port, m.config.Path)
-		if err := m.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Error starting metrics server: %v", err)
-		}
-	}()
+	log.Printf("Starting metrics server on port %d at path %s", m.config.Port, m.config.Path)
+	if err := m.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("Error starting metrics server: %v", err)
+	}
 }
 
 // Stop gracefully shuts down the metrics server.
@@ -142,19 +140,17 @@ func (m *Metrics) Stop() error {
 
 // UpdateSystemMetrics collects and updates system-level metrics (e.g., memory usage).
 func (m *Metrics) UpdateSystemMetrics() {
-	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				m.collectMetrics()
-				//case <-stop:
-				//	log.Println("Stopping metrics collection")
-				//	return
-			}
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.collectMetrics()
+			//case <-stop:
+			//	log.Println("Stopping metrics collection")
+			//	return
 		}
-	}()
+	}
 }
 
 // collectMetrics collects individual system metrics.
