@@ -10,6 +10,7 @@ const (
 	Connected
 )
 
+// Type is the type of the connection that never changes.
 const (
 	PushToServer = iota
 	PullFromServer

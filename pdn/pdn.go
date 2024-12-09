@@ -1,3 +1,4 @@
+// Package pdn is middleware that Peer-assisted Delivery Network with WebRTC.
 package pdn
 
 import (

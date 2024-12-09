@@ -1,3 +1,4 @@
+// Package pdn is middleware that Peer-assisted Delivery Network with WebRTC.
 package pdn
 
 import (
@@ -6,6 +7,7 @@ import (
 	"pdn/signal"
 )
 
+// Config contains the configuration for the PDN.
 type Config struct {
 	Signal      signal.Config
 	Database    database.Config

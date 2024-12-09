@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	// ErrNoForwarder is an error that occurs when there is no forwarder.
 	ErrNoForwarder = fmt.Errorf("no forwarder")
 )
 
@@ -96,60 +97,57 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	// 02. Find forwarding peer connections. Because the fetcher don't know the forwarder left or just temporal issue.
 	// So we need to notify the fetcher that the forwarder left. And pull again.
-	forwards, err := c.database.FindConnectionInfoByFrom(msg.ChannelID, msg.ClientID)
-	if err != nil {
+	if forwards, err := c.database.FindConnectionInfoByFrom(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in finding connection info by from %v", err)
-		return
-	}
-
-	for _, forward := range forwards {
-		if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
-			Type:         response.CLOSED,
-			ConnectionID: forward.ID,
-		}); err != nil {
-			log.Printf("error occurs in publishing close message %v", err)
-			return
-		}
-		if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
-			log.Printf("error occurs in deleting connection info %v", err)
-			return
+	} else {
+		for _, forward := range forwards {
+			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
+				Type:         response.CLOSED,
+				ConnectionID: forward.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
+				return
+			}
+			if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
+				log.Printf("error occurs in deleting connection info %v", err)
+				return
+			}
 		}
 	}
 
 	// 03. Find fetching connections. Because the forwarder don't know the fetcher left or just temporal issue.
 	// So we need to notify the forwarder that the fetcher left. Then Forwarder can clear the forwarding connection.
-	fetches, err := c.database.FindConnectionInfoByTo(msg.ChannelID, msg.ClientID)
-	for _, fetch := range fetches {
-		switch fetch.Type {
-		case database.PushToServer:
-			if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
-				ConnectionID: fetch.ID,
-			}); err != nil {
-				log.Printf("error occurs in publishing close message %v", err)
-				return
+	if fetches, err := c.database.FindConnectionInfoByTo(msg.ChannelID, msg.ClientID); err != nil {
+		log.Printf("error occurs in finding connection info by to %v", err)
+	} else {
+		for _, fetch := range fetches {
+			switch fetch.Type {
+			case database.PushToServer:
+				if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
+					ConnectionID: fetch.ID,
+				}); err != nil {
+					log.Printf("error occurs in publishing close message %v", err)
+				}
+			case database.PullFromServer:
+				if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
+					ConnectionID: fetch.ID,
+				}); err != nil {
+					log.Printf("error occurs in publishing close message %v", err)
+				}
+			case database.PeerToPeer:
+				if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
+					Type:         response.CLEAR,
+					ConnectionID: fetch.ID,
+				}); err != nil {
+					log.Printf("error occurs in publishing close message %v", err)
+				}
+			default:
+				panic("unhandled default case")
 			}
-		case database.PullFromServer:
-			if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
-				ConnectionID: fetch.ID,
-			}); err != nil {
-				log.Printf("error occurs in publishing close message %v", err)
-				return
-			}
-		case database.PeerToPeer:
-			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
-				Type:         response.CLEAR,
-				ConnectionID: fetch.ID,
-			}); err != nil {
-				log.Printf("error occurs in publishing close message %v", err)
-				return
-			}
-		default:
-			panic("unhandled default case")
-		}
 
-		if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
-			log.Printf("error occurs in deleting connection info %v", err)
-			return
+			if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
+				log.Printf("error occurs in deleting connection info %v", err)
+			}
 		}
 	}
 

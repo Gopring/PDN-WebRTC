@@ -1,8 +1,12 @@
 package coordinator
 
-const DefaultMaxForwardingNumber = 1
-const DefaultSetPeerConnection = true
+// Default values for the coordinator. If the values are not set, these values are used.
+const (
+	DefaultMaxForwardingNumber = 1
+	DefaultSetPeerConnection   = true
+)
 
+// Config contains the configuration for the coordinator.
 type Config struct {
 	MaxForwardingNumber int
 	SetPeerConnection   bool

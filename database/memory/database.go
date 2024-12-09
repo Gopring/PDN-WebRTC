@@ -412,6 +412,7 @@ func (d *DB) UpdateConnectionInfo(connectionID string, status int) (*database.Co
 	return info, nil
 }
 
+// DeleteConnectionInfoByID deletes a connection by its ID.
 func (d *DB) DeleteConnectionInfoByID(connectionID string) error {
 	txn := d.db.Txn(true)
 	defer txn.Abort()

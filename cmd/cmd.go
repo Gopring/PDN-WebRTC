@@ -50,8 +50,10 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 	fs.StringVar(&sig.KeyFile, "key", "", "key file path")
 	fs.StringVar(&sig.CertFile, "cert", "", "cert file path")
 	fs.BoolVar(&db.SetDefaultChannel, "setDefaultChannel", false, "set default channel for debug or test")
-	fs.IntVar(&cor.MaxForwardingNumber, "maxForwardingNumber", coordinator.DefaultMaxForwardingNumber, "max forwarding number")
-	fs.BoolVar(&cor.SetPeerConnection, "setPeerConnection", coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
+	fs.IntVar(&cor.MaxForwardingNumber, "maxForwardingNumber",
+		coordinator.DefaultMaxForwardingNumber, "max forwarding number")
+	fs.BoolVar(&cor.SetPeerConnection, "setPeerConnection",
+		coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
 
 	err := fs.Parse(args)
 	if err != nil {

@@ -76,7 +76,7 @@ func TestParseArgs(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			assert.Truef(t, got.IsSame(tt.want), "parse() = %v, want %v", got, tt.want)
+			assert.Truef(t, got.Signal.IsSame(tt.want), "parse() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -213,7 +213,7 @@ func TestSetupConfig(t *testing.T) {
 				return
 			}
 
-			if !config.IsSame(tt.expected) {
+			if !config.Signal.IsSame(tt.expected) {
 				assert.Errorf(t, err, "SetupConfig() = %v, expected %v", config, tt.expected)
 			}
 		})
