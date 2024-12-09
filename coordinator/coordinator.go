@@ -346,6 +346,10 @@ func (c *Coordinator) handlePeerDisconnected(event any) {
 }
 
 func (c *Coordinator) balance(channelID, fetcherID string) error {
+	if !c.config.SetPeerConnection {
+		return nil
+	}
+
 	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxForwardingNumber)
 	if err != nil {
 		return fmt.Errorf("error occurs in finding user info to forward %v", err)
