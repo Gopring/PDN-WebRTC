@@ -106,11 +106,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 				ConnectionID: forward.ID,
 			}); err != nil {
 				log.Printf("error occurs in publishing close message %v", err)
-				return
 			}
 			if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
 				log.Printf("error occurs in deleting connection info %v", err)
-				return
 			}
 		}
 	}
@@ -153,7 +151,6 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	if err := c.database.DeleteClientInfoByID(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in deleting client info %v", err)
-		return
 	}
 }
 
