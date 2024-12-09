@@ -9,6 +9,7 @@ import (
 	"os"
 	"pdn/coordinator"
 	"pdn/database"
+	"pdn/metric"
 	"pdn/pdn"
 	"pdn/signal"
 )
@@ -43,6 +44,7 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 	sig := signal.Config{}
 	db := database.Config{}
 	cor := coordinator.Config{}
+	met := metric.Config{}
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.SetOutput(w)
 	fs.IntVar(&sig.Port, "port", signal.DefaultPort, "listening port")
@@ -68,5 +70,6 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		Signal:      sig,
 		Database:    db,
 		Coordinator: cor,
+		Metrics:     met,
 	}, nil
 }
