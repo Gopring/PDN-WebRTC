@@ -28,7 +28,7 @@ func New(config Config) *PDN {
 	brk := broker.New()
 	db := memory.New(config.Database)
 	med := media.New(brk, met)
-	cod := coordinator.New(config.Coordinator, brk, db)
+	cod := coordinator.New(config.Coordinator, brk, met, db)
 	sig := signal.New(config.Signal, db, brk, met)
 
 	return &PDN{
