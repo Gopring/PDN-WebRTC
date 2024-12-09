@@ -8,6 +8,7 @@ import (
 	"pdn/database"
 	"pdn/database/memory"
 	"pdn/media"
+	"pdn/metric"
 	"pdn/signal"
 )
 
@@ -18,6 +19,7 @@ type PDN struct {
 	media       *media.Media
 	coordinator *coordinator.Coordinator
 	signal      *signal.Signal
+	metric      *metric.Metrics
 }
 
 // New creates a new instance of PDN.
@@ -27,17 +29,26 @@ func New(config Config) *PDN {
 	med := media.New(brk)
 	cod := coordinator.New(config.Coordinator, brk, db)
 	sig := signal.New(config.Signal, db, brk)
+	met := metric.New(config.Metrics)
 	return &PDN{
 		broker:      brk,
 		database:    db,
 		media:       med,
 		coordinator: cod,
 		signal:      sig,
+		metric:      met,
 	}
 }
 
-// Start runs the signal server.
+// Start runs the signal server and metrics server.
 func (p *PDN) Start() error {
+	stop := make(chan struct{})
+
+	go func() {
+		p.metric.RegisterMetrics()
+		p.metric.Start(stop)
+		defer p.metric.Stop()
+	}()
 	go p.media.Start()
 	go p.coordinator.Start()
 	if err := p.signal.Start(); err != nil {

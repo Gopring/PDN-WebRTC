@@ -17,34 +17,34 @@ import (
 
 // Metrics contains the Prometheus metrics server and registered custom metrics.
 type Metrics struct {
-	httpServer                *http.Server
-	config                    Config
-	webSocketConnections      prometheus.Gauge
-	webRTCConnections         prometheus.Gauge
-	cpuUsage                  prometheus.Gauge
-	memoryUsage               prometheus.Gauge
-	networkUsage              *prometheus.GaugeVec
+	httpServer           *http.Server
+	config               Config
+	webSocketConnections prometheus.Gauge
+	webRTCConnections    prometheus.Gauge
+	cpuUsage             prometheus.Gauge
+	memoryUsage          prometheus.Gauge
+	networkUsage         *prometheus.GaugeVec
+
 	clientConnectionAttempts  prometheus.Counter
 	clientConnectionSuccesses prometheus.Counter
 	clientConnectionFailures  prometheus.Counter
-}
 
-// Config defines the configuration for the metrics server.
-type Config struct {
-	Port int    // Port for metrics server
-	Path string // Path for metrics endpoint
+	forwarderConnections prometheus.Gauge
+	fetcherConnections   prometheus.Gauge
+	pushConnections      prometheus.Gauge
+	pullConnections      prometheus.Gauge
 }
-
-// Default values for metrics configuration.
-const (
-	DefaultMetricsPort = 9090
-	DefaultMetricsPath = "/metrics"
-)
 
 // New creates a new Metrics instance with the specified configuration.
-func New(config Config) *Metrics {
+func New(c Config) *Metrics {
+	if c.Port == 0 {
+		c.Port = DefaultMetricsPort
+	}
+	if c.Path == "" {
+		c.Path = DefaultMetricsPath
+	}
 	return &Metrics{
-		config: config,
+		config: c,
 		webSocketConnections: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "websocket_connections_total",
 			Help: "Current number of WebSocket connections.",
@@ -77,6 +77,22 @@ func New(config Config) *Metrics {
 			Name: "client_connection_failures_total",
 			Help: "Total number of failed client connections.",
 		}),
+		forwarderConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "forwarder_connections_total",
+			Help: "Current number of forwarder connections.",
+		}),
+		fetcherConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "fetcher_connections_total",
+			Help: "Current number of fetcher connections.",
+		}),
+		pushConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "push_connections_total",
+			Help: "Current number of push connections.",
+		}),
+		pullConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "pull_connections_total",
+			Help: "Current number of pull connections.",
+		}),
 	}
 }
 
@@ -90,6 +106,10 @@ func (m *Metrics) RegisterMetrics() {
 	prometheus.MustRegister(m.clientConnectionAttempts)
 	prometheus.MustRegister(m.clientConnectionSuccesses)
 	prometheus.MustRegister(m.clientConnectionFailures)
+	prometheus.MustRegister(m.forwarderConnections)
+	prometheus.MustRegister(m.fetcherConnections)
+	prometheus.MustRegister(m.pushConnections)
+	prometheus.MustRegister(m.pullConnections)
 
 }
 
@@ -207,4 +227,44 @@ func (m *Metrics) IncrementClientConnectionSuccesses() {
 // IncrementClientConnectionFailures increments the client connection failures counter.
 func (m *Metrics) IncrementClientConnectionFailures() {
 	m.clientConnectionFailures.Inc()
+}
+
+// IncrementForwarderConnections increments the number of forwarder connections by 1.
+func (m *Metrics) IncrementForwarderConnections() {
+	m.forwarderConnections.Inc()
+}
+
+// DecrementForwarderConnections decrements the number of forwarder connections by 1.
+func (m *Metrics) DecrementForwarderConnections() {
+	m.forwarderConnections.Dec()
+}
+
+// IncrementFetcherConnections increments the number of fetcher connections by 1.
+func (m *Metrics) IncrementFetcherConnections() {
+	m.fetcherConnections.Inc()
+}
+
+// DecrementFetcherConnections decrements the number of fetcher connections by 1.
+func (m *Metrics) DecrementFetcherConnections() {
+	m.fetcherConnections.Dec()
+}
+
+// IncrementPushConnections increments the number of push connections by 1.
+func (m *Metrics) IncrementPushConnections() {
+	m.pushConnections.Inc()
+}
+
+// DecrementPushConnections decrements the number of push connections by 1.
+func (m *Metrics) DecrementPushConnections() {
+	m.pushConnections.Dec()
+}
+
+// IncrementPullConnections increments the number of pull connections by 1.
+func (m *Metrics) IncrementPullConnections() {
+	m.pullConnections.Inc()
+}
+
+// DecrementPullConnections decrements the number of pull connections by 1.
+func (m *Metrics) DecrementPullConnections() {
+	m.pullConnections.Dec()
 }
