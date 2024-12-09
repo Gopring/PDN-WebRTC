@@ -344,6 +344,7 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 	if !c.config.SetPeerConnection {
 		return nil
 	}
+	log.Printf("balancing %s %s", channelID, fetcherID)
 
 	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxForwardingNumber)
 	if err != nil {
