@@ -308,11 +308,6 @@ func (c *Coordinator) handlePeerConnected(event any) {
 		return
 	}
 
-	if _, err := c.database.UpdateClientInfo(peerConn.ChannelID, peerConn.To, database.Fetcher); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
-		return
-	}
-
 	serverConn, err := c.database.FindDownstreamInfo(peerConn.ChannelID, peerConn.To)
 	if err != nil {
 		log.Printf("error occurs in finding downstream info %v", err)
