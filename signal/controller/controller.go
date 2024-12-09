@@ -9,6 +9,7 @@ import (
 	"log"
 	"pdn/broker"
 	"pdn/database"
+	"pdn/metric"
 	"pdn/types/client/request"
 	"pdn/types/client/response"
 	"pdn/types/message"
@@ -18,6 +19,7 @@ import (
 type Controller struct {
 	broker   *broker.Broker
 	database database.Database
+	metric   *metric.Metrics
 }
 
 // New creates a new instance of Controller.
@@ -30,6 +32,11 @@ func New(b *broker.Broker, db database.Database) *Controller {
 
 // Process handles HTTP requests.
 func (c *Controller) Process(conn *websocket.Conn) error {
+	c.metric.IncrementWebSocketConnections()
+	defer c.metric.DecrementWebSocketConnections()
+
+	c.metric.IncrementClientConnectionAttempts()
+
 	// 01. Build the context for control response goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -39,6 +46,7 @@ func (c *Controller) Process(conn *websocket.Conn) error {
 	// 02. Authenticate the connection
 	channelID, userID, err := c.authenticate(conn)
 	if err != nil {
+		c.metric.IncrementClientConnectionFailures()
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
@@ -46,8 +54,12 @@ func (c *Controller) Process(conn *websocket.Conn) error {
 		ChannelID: channelID,
 		ClientID:  userID,
 	}); err != nil {
+		c.metric.IncrementClientConnectionFailures()
 		return fmt.Errorf("failed to publish connected message: %w", err)
 	}
+
+	c.metric.IncrementClientConnectionSuccesses()
+
 	defer func() {
 		if err := c.broker.Publish(broker.Client, broker.DEACTIVATE, message.Deactivate{
 			ChannelID: channelID,

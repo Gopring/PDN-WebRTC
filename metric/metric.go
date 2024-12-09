@@ -97,7 +97,7 @@ func New(c Config) *Metrics {
 }
 
 // RegisterMetrics registers custom metrics with Prometheus.
-func (m *Metrics) RegisterMetrics() {
+func (m *Metrics) registerMetrics() {
 	prometheus.MustRegister(m.webSocketConnections)
 	prometheus.MustRegister(m.webRTCConnections)
 	prometheus.MustRegister(m.cpuUsage)
@@ -114,14 +114,15 @@ func (m *Metrics) RegisterMetrics() {
 }
 
 // Start initializes and starts the metrics HTTP server.
-func (m *Metrics) Start(stop <-chan struct{}) {
+func (m *Metrics) Start() {
+	m.registerMetrics()
 	m.httpServer = &http.Server{
 		Addr:              fmt.Sprintf(":%d", m.config.Port),
 		Handler:           promhttp.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	go m.UpdateSystemMetrics(stop)
+	go m.UpdateSystemMetrics()
 	go func() {
 		log.Printf("Starting metrics server on port %d at path %s", m.config.Port, m.config.Path)
 		if err := m.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -140,7 +141,7 @@ func (m *Metrics) Stop() error {
 }
 
 // UpdateSystemMetrics collects and updates system-level metrics (e.g., memory usage).
-func (m *Metrics) UpdateSystemMetrics(stop <-chan struct{}) {
+func (m *Metrics) UpdateSystemMetrics() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -148,9 +149,9 @@ func (m *Metrics) UpdateSystemMetrics(stop <-chan struct{}) {
 			select {
 			case <-ticker.C:
 				m.collectMetrics()
-			case <-stop:
-				log.Println("Stopping metrics collection")
-				return
+				//case <-stop:
+				//	log.Println("Stopping metrics collection")
+				//	return
 			}
 		}
 	}()

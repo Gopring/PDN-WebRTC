@@ -42,13 +42,8 @@ func New(config Config) *PDN {
 
 // Start runs the signal server and metrics server.
 func (p *PDN) Start() error {
-	stop := make(chan struct{})
 
-	go func() {
-		p.metric.RegisterMetrics()
-		p.metric.Start(stop)
-		defer p.metric.Stop()
-	}()
+	go p.metric.Start()
 	go p.media.Start()
 	go p.coordinator.Start()
 	if err := p.signal.Start(); err != nil {
