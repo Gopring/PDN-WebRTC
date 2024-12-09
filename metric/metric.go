@@ -158,31 +158,32 @@ func (m *Metrics) collectMetrics() {
 	// Collect CPU usage
 	if percentages, err := cpu.Percent(1*time.Second, false); err == nil && len(percentages) > 0 {
 		m.cpuUsage.Set(percentages[0])
-		//log.Printf("CPU usage updated: %.2f%%", percentages[0])
+		// log.Printf("CPU usage updated: %.2f%%", percentages[0])
 	} else {
-		//log.Printf("Error fetching CPU usage: %v", err)
+		// log.Printf("Error fetching CPU usage: %v", err)
 	}
 
 	// Collect memory usage
 	if vmStats, err := mem.VirtualMemory(); err == nil {
-		m.memoryUsage.Set(float64(vmStats.Used))
-		//log.Printf("Memory usage updated: %v bytes", vmStats.Used)
+		shortMemory := float64(vmStats.Used) / (1 << 20) // Convert to MB
+		m.memoryUsage.Set(shortMemory)
+		// log.Printf("Memory usage updated: %.2f MB", shortMemory)
 	} else {
-		//log.Printf("Error fetching memory usage: %v", err)
+		// log.Printf("Error fetching memory usage: %v", err)
 	}
 
 	// Collect network usage
 	if ioStats, err := net.IOCounters(false); err == nil && len(ioStats) > 0 {
 		totalRecv, totalSent := 0.0, 0.0
 		for _, stat := range ioStats {
-			totalRecv += float64(stat.BytesRecv)
-			totalSent += float64(stat.BytesSent)
+			totalRecv += float64(stat.BytesRecv) / (1 << 20) // Convert to MB
+			totalSent += float64(stat.BytesSent) / (1 << 20) // Convert to MB
 		}
 		m.UpdateNetworkUsage("inbound", totalRecv)
 		m.UpdateNetworkUsage("outbound", totalSent)
-		//log.Printf("Network usage updated: Inbound=%.0f bytes, Outbound=%.0f bytes", totalRecv, totalSent)
+		// log.Printf("Network usage updated: Inbound=%.2f MB, Outbound=%.2f MB", totalRecv, totalSent)
 	} else {
-		//log.Printf("Error fetching network usage: %v", err)
+		// log.Printf("Error fetching network usage: %v", err)
 	}
 }
 
