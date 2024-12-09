@@ -56,8 +56,8 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		coordinator.DefaultMaxForwardingNumber, "max forwarding number")
 	fs.BoolVar(&cor.SetPeerConnection, "setPeerConnection",
 		coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
-	fs.IntVar(&met.Port, "port", metric.DefaultMetricsPort, "listening port")
-	fs.StringVar(&met.Path, "path", metric.DefaultMetricsPath, "metrics path")
+	fs.IntVar(&met.Port, "metricPort", metric.DefaultMetricsPort, "listening port")
+	fs.StringVar(&met.Path, "metricPath", metric.DefaultMetricsPath, "metrics path")
 
 	err := fs.Parse(args)
 	if err != nil {
