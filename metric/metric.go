@@ -29,20 +29,15 @@ type Metrics struct {
 	clientConnectionSuccesses prometheus.Counter
 	clientConnectionFailures  prometheus.Counter
 
-	forwarderConnections prometheus.Gauge
-	fetcherConnections   prometheus.Gauge
-	pushConnections      prometheus.Gauge
-	pullConnections      prometheus.Gauge
+	pushConnections prometheus.Gauge
+	pullConnections prometheus.Gauge
+	peerConnections prometheus.Gauge
+
+	balancingOccurs prometheus.Counter
 }
 
 // New creates a new Metrics instance with the specified configuration.
 func New(c Config) *Metrics {
-	if c.Port == 0 {
-		c.Port = DefaultMetricsPort
-	}
-	if c.Path == "" {
-		c.Path = DefaultMetricsPath
-	}
 	return &Metrics{
 		config: c,
 		webSocketConnections: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -77,14 +72,6 @@ func New(c Config) *Metrics {
 			Name: "client_connection_failures_total",
 			Help: "Total number of failed client connections.",
 		}),
-		forwarderConnections: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "forwarder_connections_total",
-			Help: "Current number of forwarder connections.",
-		}),
-		fetcherConnections: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "fetcher_connections_total",
-			Help: "Current number of fetcher connections.",
-		}),
 		pushConnections: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "push_connections_total",
 			Help: "Current number of push connections.",
@@ -92,6 +79,14 @@ func New(c Config) *Metrics {
 		pullConnections: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "pull_connections_total",
 			Help: "Current number of pull connections.",
+		}),
+		peerConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "peer_connections_total",
+			Help: "Current number of peer connections.",
+		}),
+		balancingOccurs: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "balancing_occurs_total",
+			Help: "Total number of load balancing occurrences.",
 		}),
 	}
 }
@@ -106,11 +101,10 @@ func (m *Metrics) registerMetrics() {
 	prometheus.MustRegister(m.clientConnectionAttempts)
 	prometheus.MustRegister(m.clientConnectionSuccesses)
 	prometheus.MustRegister(m.clientConnectionFailures)
-	prometheus.MustRegister(m.forwarderConnections)
-	prometheus.MustRegister(m.fetcherConnections)
 	prometheus.MustRegister(m.pushConnections)
 	prometheus.MustRegister(m.pullConnections)
-
+	prometheus.MustRegister(m.peerConnections)
+	prometheus.MustRegister(m.balancingOccurs)
 }
 
 // Start initializes and starts the metrics HTTP server.
@@ -156,35 +150,36 @@ func (m *Metrics) UpdateSystemMetrics() {
 // collectMetrics collects individual system metrics.
 func (m *Metrics) collectMetrics() {
 	// Collect CPU usage
-	if percentages, err := cpu.Percent(1*time.Second, false); err == nil && len(percentages) > 0 {
-		m.cpuUsage.Set(percentages[0])
-		// log.Printf("CPU usage updated: %.2f%%", percentages[0])
-	} else {
-		// log.Printf("Error fetching CPU usage: %v", err)
+	percentages, err := cpu.Percent(1*time.Second, false)
+	if err != nil && len(percentages) == 0 {
+		log.Printf("Error fetching CPU usage: %v", err)
+		return
 	}
+	m.cpuUsage.Set(percentages[0])
 
 	// Collect memory usage
-	if vmStats, err := mem.VirtualMemory(); err == nil {
-		shortMemory := float64(vmStats.Used) / (1 << 20) // Convert to MB
-		m.memoryUsage.Set(shortMemory)
-		// log.Printf("Memory usage updated: %.2f MB", shortMemory)
-	} else {
-		// log.Printf("Error fetching memory usage: %v", err)
+	vmStats, err := mem.VirtualMemory()
+	if err != nil {
+		log.Printf("Memory usage updated: %v MB", vmStats)
+		return
 	}
+	shortMemory := float64(vmStats.Used) / (1 << 20) // Convert to MB
+	m.memoryUsage.Set(shortMemory)
 
 	// Collect network usage
-	if ioStats, err := net.IOCounters(false); err == nil && len(ioStats) > 0 {
-		totalRecv, totalSent := 0.0, 0.0
-		for _, stat := range ioStats {
-			totalRecv += float64(stat.BytesRecv) / (1 << 20) // Convert to MB
-			totalSent += float64(stat.BytesSent) / (1 << 20) // Convert to MB
-		}
-		m.UpdateNetworkUsage("inbound", totalRecv)
-		m.UpdateNetworkUsage("outbound", totalSent)
-		// log.Printf("Network usage updated: Inbound=%.2f MB, Outbound=%.2f MB", totalRecv, totalSent)
-	} else {
+	ioStats, err := net.IOCounters(false)
+	if err != nil && len(ioStats) == 0 {
+		// log.Printf("Network usage updated: Inbound=%.2f MB, Outbound=%.2f MB", totalReceive, totalSent)
 		// log.Printf("Error fetching network usage: %v", err)
 	}
+
+	totalReceive, totalSent := 0.0, 0.0
+	for _, stat := range ioStats {
+		totalReceive += float64(stat.BytesRecv) / (1 << 20) // Convert to MB
+		totalSent += float64(stat.BytesSent) / (1 << 20)    // Convert to MB
+	}
+	m.UpdateNetworkUsage("inbound", totalReceive)
+	m.UpdateNetworkUsage("outbound", totalSent)
 }
 
 // IncrementWebSocketConnections increments the WebSocket connection count.
@@ -227,24 +222,14 @@ func (m *Metrics) IncrementClientConnectionFailures() {
 	m.clientConnectionFailures.Inc()
 }
 
-// IncrementForwarderConnections increments the number of forwarder connections by 1.
-func (m *Metrics) IncrementForwarderConnections() {
-	m.forwarderConnections.Inc()
+// IncrementPeerConnections increments the number of forwarder connections by 1.
+func (m *Metrics) IncrementPeerConnections() {
+	m.peerConnections.Inc()
 }
 
-// DecrementForwarderConnections decrements the number of forwarder connections by 1.
-func (m *Metrics) DecrementForwarderConnections() {
-	m.forwarderConnections.Dec()
-}
-
-// IncrementFetcherConnections increments the number of fetcher connections by 1.
-func (m *Metrics) IncrementFetcherConnections() {
-	m.fetcherConnections.Inc()
-}
-
-// DecrementFetcherConnections decrements the number of fetcher connections by 1.
-func (m *Metrics) DecrementFetcherConnections() {
-	m.fetcherConnections.Dec()
+// DecrementPeerConnections decrements the number of forwarder connections by 1.
+func (m *Metrics) DecrementPeerConnections() {
+	m.peerConnections.Dec()
 }
 
 // IncrementPushConnections increments the number of push connections by 1.
@@ -265,4 +250,9 @@ func (m *Metrics) IncrementPullConnections() {
 // DecrementPullConnections decrements the number of pull connections by 1.
 func (m *Metrics) DecrementPullConnections() {
 	m.pullConnections.Dec()
+}
+
+// IncrementBalancingOccurs increments the number of load balancing occurrences by 1.
+func (m *Metrics) IncrementBalancingOccurs() {
+	m.balancingOccurs.Inc()
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"pdn/media/stream"
+	"pdn/metric"
 	"sync"
 
 	"github.com/pion/webrtc/v4"
@@ -19,6 +20,7 @@ import (
 type Media struct {
 	mu               sync.RWMutex
 	broker           *broker.Broker
+	metric           *metric.Metrics
 	streams          map[string]*stream.Stream
 	connections      map[string]*webrtc.PeerConnection
 	connectionConfig webrtc.Configuration
@@ -35,9 +37,10 @@ var defaultWebrtcConfig = webrtc.Configuration{
 
 // New creates a new Media instance.
 // TODO: Add more configuration options.
-func New(b *broker.Broker) *Media {
+func New(b *broker.Broker, m *metric.Metrics) *Media {
 	return &Media{
 		broker:           b,
+		metric:           m,
 		streams:          make(map[string]*stream.Stream),
 		connections:      make(map[string]*webrtc.PeerConnection),
 		connectionConfig: defaultWebrtcConfig,
@@ -237,6 +240,7 @@ func (m *Media) publishStateChange(conn *webrtc.PeerConnection, connectionID str
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
 			log.Printf("Media: connection %s: Connected", connectionID)
+			m.metric.IncrementWebRTCConnections()
 			if err := m.broker.Publish(broker.Media, broker.CONNECTED, message.Connected{
 				ConnectionID: connectionID,
 			}); err != nil {
@@ -244,6 +248,7 @@ func (m *Media) publishStateChange(conn *webrtc.PeerConnection, connectionID str
 			}
 		case webrtc.PeerConnectionStateClosed:
 			log.Printf("Media: connection %s: Closed", connectionID)
+			m.metric.DecrementWebRTCConnections()
 			//if err := m.broker.Publish(broker.Media, broker.DISCONNECTED, message.Disconnected{
 			//	ConnectionID: connectionID,
 			//}); err != nil {

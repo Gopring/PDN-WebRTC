@@ -24,11 +24,11 @@ type PDN struct {
 
 // New creates a new instance of PDN.
 func New(config Config) *PDN {
+	met := metric.New(config.Metrics)
 	brk := broker.New()
 	db := memory.New(config.Database)
-	med := media.New(brk)
+	med := media.New(brk, met)
 	cod := coordinator.New(config.Coordinator, brk, db)
-	met := metric.New(config.Metrics)
 	sig := signal.New(config.Signal, db, brk, met)
 
 	return &PDN{

@@ -58,9 +58,6 @@ func (c *Controller) Process(conn *websocket.Conn) error {
 		c.metric.IncrementClientConnectionFailures()
 		return fmt.Errorf("failed to publish connected message: %w", err)
 	}
-
-	c.metric.IncrementClientConnectionSuccesses()
-
 	defer func() {
 		if err := c.broker.Publish(broker.Client, broker.DEACTIVATE, message.Deactivate{
 			ChannelID: channelID,
@@ -69,6 +66,8 @@ func (c *Controller) Process(conn *websocket.Conn) error {
 			log.Printf("failed to publish left message: %v", err)
 		}
 	}()
+
+	c.metric.IncrementClientConnectionSuccesses()
 
 	go c.sendResponse(ctx, conn, channelID, userID)
 

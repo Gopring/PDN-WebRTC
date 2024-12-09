@@ -8,6 +8,7 @@ import (
 	"log"
 	"pdn/broker"
 	"pdn/database"
+	"pdn/metric"
 	"pdn/types/client/response"
 	"pdn/types/message"
 )
@@ -21,14 +22,16 @@ var (
 type Coordinator struct {
 	config   Config
 	broker   *broker.Broker
+	metric   *metric.Metrics
 	database database.Database
 }
 
 // New creates a new instance of Coordinator.
-func New(c Config, b *broker.Broker, db database.Database) *Coordinator {
+func New(c Config, b *broker.Broker, m *metric.Metrics, db database.Database) *Coordinator {
 	return &Coordinator{
 		config:   c,
 		broker:   b,
+		metric:   m,
 		database: db,
 	}
 }
@@ -110,6 +113,7 @@ func (c *Coordinator) handleDeactivate(event any) {
 			if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
 				log.Printf("error occurs in deleting connection info %v", err)
 			}
+			c.metric.DecrementPeerConnections()
 		}
 	}
 
@@ -139,6 +143,7 @@ func (c *Coordinator) handleDeactivate(event any) {
 				}); err != nil {
 					log.Printf("error occurs in publishing close message %v", err)
 				}
+				c.metric.DecrementPeerConnections()
 			default:
 				panic("unhandled default case")
 			}
@@ -319,6 +324,8 @@ func (c *Coordinator) handlePeerConnected(event any) {
 		return
 	}
 
+	c.metric.IncrementPeerConnections()
+
 	if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
 		ConnectionID: serverConn.ID,
 	}); err != nil {
@@ -359,6 +366,7 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 		return fmt.Errorf("error occurs in creating peer connection info %v", err)
 	}
 
+	c.metric.IncrementBalancingOccurs()
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+fetcherID), response.Fetch{
 		Type:         response.FETCH,
 		ConnectionID: peerConn.ID,
