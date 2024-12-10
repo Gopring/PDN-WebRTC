@@ -168,6 +168,11 @@ func (c *Coordinator) handlePush(event any) {
 		return
 	}
 
+	if msg.ClientID != "publisher" {
+		log.Printf("invalid user pushed %v", msg.ClientID)
+		return
+	}
+
 	connInfo, err := c.database.CreatePushConnectionInfo(msg.ChannelID, msg.ClientID, msg.ConnectionID)
 	if err != nil {
 		log.Printf("error occurs in creating connection info %v", err)
