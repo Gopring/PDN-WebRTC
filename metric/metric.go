@@ -15,6 +15,10 @@ import (
 	"github.com/shirou/gopsutil/net"
 )
 
+var (
+	ErrNetworkNotFound = errors.New("no network stats found")
+)
+
 // Metrics contains the Prometheus metrics server and registered custom metrics.
 type Metrics struct {
 	httpServer           *http.Server
@@ -136,10 +140,15 @@ func (m *Metrics) Stop() error {
 func (m *Metrics) UpdateSystemMetrics() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	netStats, err := net.IOCounters(false)
+	prev := netStats[0]
+	if err != nil {
+		panic(err)
+	}
 	for {
 		select {
 		case <-ticker.C:
-			m.collectMetrics()
+			prev, err = m.collectMetrics(prev)
 			//case <-stop:
 			//	log.Println("Stopping metrics collection")
 			//	return
@@ -148,38 +157,35 @@ func (m *Metrics) UpdateSystemMetrics() {
 }
 
 // collectMetrics collects individual system metrics.
-func (m *Metrics) collectMetrics() {
+func (m *Metrics) collectMetrics(prevNetStats net.IOCountersStat) (net.IOCountersStat, error) {
 	// Collect CPU usage
 	percentages, err := cpu.Percent(1*time.Second, false)
 	if err != nil && len(percentages) == 0 {
-		log.Printf("Error fetching CPU usage: %v", err)
-		return
+		return net.IOCountersStat{}, fmt.Errorf("error fetching CPU usage: %v", err)
 	}
 	m.cpuUsage.Set(percentages[0])
 
 	// Collect memory usage
 	vmStats, err := mem.VirtualMemory()
 	if err != nil {
-		log.Printf("Memory usage updated: %v MB", vmStats)
-		return
+		return net.IOCountersStat{}, fmt.Errorf("error fetching memory usage: %v", err)
 	}
 	shortMemory := float64(vmStats.Used) / (1 << 20) // Convert to MB
 	m.memoryUsage.Set(shortMemory)
 
 	// Collect network usage
-	ioStats, err := net.IOCounters(false)
-	if err != nil && len(ioStats) == 0 {
-		// log.Printf("Network usage updated: Inbound=%.2f MB, Outbound=%.2f MB", totalReceive, totalSent)
-		// log.Printf("Error fetching network usage: %v", err)
+	curNetStats, err := net.IOCounters(false)
+	if err != nil {
+		return net.IOCountersStat{}, fmt.Errorf("error fetching network usage: %v", err)
+	} else if len(curNetStats) == 0 {
+		return net.IOCountersStat{}, fmt.Errorf("error fetching network usage: %v", ErrNetworkNotFound)
 	}
 
-	totalReceive, totalSent := 0.0, 0.0
-	for _, stat := range ioStats {
-		totalReceive += float64(stat.BytesRecv) / (1 << 20) // Convert to MB
-		totalSent += float64(stat.BytesSent) / (1 << 20)    // Convert to MB
-	}
-	m.UpdateNetworkUsage("inbound", totalReceive)
-	m.UpdateNetworkUsage("outbound", totalSent)
+	receive := (float64(curNetStats[0].BytesRecv) - float64(prevNetStats.BytesRecv)) / (1 << 20) // Convert to MB
+	sent := (float64(curNetStats[0].BytesSent) - float64(prevNetStats.BytesSent)) / (1 << 20)    // Convert to MB
+	m.UpdateNetworkUsage("inbound", receive)
+	m.UpdateNetworkUsage("outbound", sent)
+	return curNetStats[0], nil
 }
 
 // IncrementWebSocketConnections increments the WebSocket connection count.
