@@ -113,7 +113,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 			if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
 				log.Printf("error occurs in deleting connection info %v", err)
 			}
-			c.metric.DecrementPeerConnections()
+			if forward.IsConnected() {
+				c.metric.DecrementPeerConnections()
+			}
 		}
 	}
 
@@ -143,7 +145,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 				}); err != nil {
 					log.Printf("error occurs in publishing close message %v", err)
 				}
-				c.metric.DecrementPeerConnections()
+				if fetch.IsConnected() {
+					c.metric.DecrementPeerConnections()
+				}
 			default:
 				panic("unhandled default case")
 			}

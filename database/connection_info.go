@@ -57,6 +57,11 @@ func (c *ConnectionInfo) IsPeerConnection() bool {
 	return c.Type == PeerToPeer
 }
 
+// IsConnected checks if the connection is connected.
+func (c *ConnectionInfo) IsConnected() bool {
+	return c.Status == Connected
+}
+
 // DeepCopy creates a deep copy of the given ConnectionInfo.
 func (c *ConnectionInfo) DeepCopy() *ConnectionInfo {
 	return &ConnectionInfo{
