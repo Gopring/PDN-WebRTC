@@ -141,14 +141,17 @@ func (m *Metrics) UpdateSystemMetrics() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	netStats, err := net.IOCounters(false)
-	prev := netStats[0]
 	if err != nil {
 		panic(err)
 	}
+	prev := netStats[0]
 	for {
 		select {
 		case <-ticker.C:
 			prev, err = m.collectMetrics(prev)
+			if err != nil {
+				log.Printf("Error collecting metrics: %v", err)
+			}
 			//case <-stop:
 			//	log.Println("Stopping metrics collection")
 			//	return
