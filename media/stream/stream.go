@@ -25,8 +25,8 @@ func (s *Stream) SetUpstream(conn *webrtc.PeerConnection, id string) {
 		var newTrackErr error
 		s.Track, newTrackErr = webrtc.NewTrackLocalStaticRTP(remoteTrack.Codec().RTPCodecCapability, "video", id)
 		if newTrackErr != nil {
-			// TODO(window9u): we should handle this panic properly.
 			log.Println(newTrackErr)
+			return
 		}
 
 		rtpBuf := make([]byte, 1400)

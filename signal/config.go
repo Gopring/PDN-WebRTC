@@ -21,11 +21,10 @@ var (
 
 // Config is the configuration for creating a Server instance.
 type Config struct {
-	Port              int
-	Debug             bool
-	CertFile          string
-	KeyFile           string
-	SetDefaultChannel bool
+	Port     int
+	Debug    bool
+	CertFile string
+	KeyFile  string
 }
 
 // IsSame checks if the given config is the same as the current one.

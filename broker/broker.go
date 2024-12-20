@@ -18,13 +18,15 @@ type Detail string
 // Topic constants for message topics.
 const (
 	ClientSocket Topic = iota
-	ClientMessage
+	Client
 	Media
-	Connection
+	Peer
 )
 
 // Detail constants for message details.
 const (
+	ACTIVATE     Detail = "ACTIVATE"
+	DEACTIVATE   Detail = "DEACTIVATE"
 	PUSH         Detail = "PUSH"
 	PULL         Detail = "PULL"
 	UPSTREAM     Detail = "UPSTREAM"
@@ -32,7 +34,7 @@ const (
 	CONNECTED    Detail = "CONNECTED"
 	DISCONNECTED Detail = "DISCONNECTED"
 	FAILED       Detail = "FAILED"
-	SUCCEED      Detail = "SUCCEED"
+	CLEAR        Detail = "CLEAR"
 )
 
 // Broker is a message broker that manages message channels and subscriptions.
@@ -113,8 +115,8 @@ func (t Topic) String() string {
 	switch t {
 	case ClientSocket:
 		return "ClientSocket"
-	case ClientMessage:
-		return "ClientMessage"
+	case Client:
+		return "Client"
 	case Media:
 		return "Media"
 	default:
