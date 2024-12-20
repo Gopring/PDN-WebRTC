@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	// ErrNetworkNotFound is returned when no network stats are found.
 	ErrNetworkNotFound = errors.New("no network stats found")
 )
 
@@ -145,17 +146,14 @@ func (m *Metrics) UpdateSystemMetrics() {
 		panic(err)
 	}
 	prev := netStats[0]
-	for {
-		select {
-		case <-ticker.C:
-			prev, err = m.collectMetrics(prev)
-			if err != nil {
-				log.Printf("Error collecting metrics: %v", err)
-			}
-			//case <-stop:
-			//	log.Println("Stopping metrics collection")
-			//	return
+	for range ticker.C {
+		prev, err = m.collectMetrics(prev)
+		if err != nil {
+			log.Printf("Error collecting metrics: %v", err)
 		}
+		//case <-stop:
+		//	log.Println("Stopping metrics collection")
+		//	return
 	}
 }
 

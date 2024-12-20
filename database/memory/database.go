@@ -110,7 +110,7 @@ func (d *DB) FindClientInfoByID(channelID, clientID string) (*database.ClientInf
 }
 
 // FindForwarderInfo  finds a client by their ID.
-func (d *DB) FindForwarderInfo(channelID string, fetcher string, max int) (*database.ClientInfo, error) {
+func (d *DB) FindForwarderInfo(channelID string, fetcher string, maxForwardNum int) (*database.ClientInfo, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
 	iter, err := txn.Get(tblClients, idxClientChannelID, channelID)
@@ -143,7 +143,7 @@ func (d *DB) FindForwarderInfo(channelID string, fetcher string, max int) (*data
 			continue
 		}
 
-		// Forwarder number should be less than max.
+		// Forwarder number should be less than maxForwardNum.
 
 		it, err := txn.Get(tblConnections, idxConnFrom, channelID, candidate.ID)
 		if err != nil {
@@ -156,12 +156,12 @@ func (d *DB) FindForwarderInfo(channelID string, fetcher string, max int) (*data
 				break
 			}
 			count++
-			if count > max {
+			if count > maxForwardNum {
 				break
 			}
 		}
 
-		if count > max {
+		if count > maxForwardNum {
 			continue
 		}
 
