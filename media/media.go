@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"pdn/media/stream"
+	"pdn/metric"
 	"sync"
 
 	"github.com/pion/webrtc/v4"
@@ -19,6 +20,7 @@ import (
 type Media struct {
 	mu               sync.RWMutex
 	broker           *broker.Broker
+	metric           *metric.Metrics
 	streams          map[string]*stream.Stream
 	connections      map[string]*webrtc.PeerConnection
 	connectionConfig webrtc.Configuration
@@ -35,19 +37,21 @@ var defaultWebrtcConfig = webrtc.Configuration{
 
 // New creates a new Media instance.
 // TODO: Add more configuration options.
-func New(b *broker.Broker) *Media {
+func New(b *broker.Broker, m *metric.Metrics) *Media {
 	return &Media{
 		broker:           b,
+		metric:           m,
 		streams:          make(map[string]*stream.Stream),
 		connections:      make(map[string]*webrtc.PeerConnection),
 		connectionConfig: defaultWebrtcConfig,
 	}
 }
 
-// Run starts the Media instance.
-func (m *Media) Run() {
+// Start starts the Media instance.
+func (m *Media) Start() {
 	upEvent := m.broker.Subscribe(broker.Media, broker.UPSTREAM)
 	downEvent := m.broker.Subscribe(broker.Media, broker.DOWNSTREAM)
+	clearEvent := m.broker.Subscribe(broker.Media, broker.CLEAR)
 
 	for {
 		var err error
@@ -56,6 +60,8 @@ func (m *Media) Run() {
 			go m.handleUpstream(event)
 		case event := <-downEvent.Receive():
 			go m.handleDownstream(event)
+		case event := <-clearEvent.Receive():
+			go m.handleClear(event)
 		}
 		if err != nil {
 			log.Printf("Failed to handle event in Media: %v", err)
@@ -75,10 +81,11 @@ func (m *Media) handleUpstream(event any) {
 		log.Printf("failed to add upstream: %v", err)
 		return
 	}
-	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(up.Key), response.Push{
-		Type:         response.PUSH,
+	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(up.Key), response.Signal{
+		Type:         response.SIGNAL,
 		ConnectionID: up.ConnectionID,
-		SDP:          serverSDP,
+		SignalType:   "answer",
+		SignalData:   serverSDP,
 	}); err != nil {
 		log.Printf("failed to publish up response: %v", err)
 		return
@@ -97,14 +104,36 @@ func (m *Media) handleDownstream(event any) {
 		log.Printf("failed to add downstream: %v", err)
 		return
 	}
-	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(down.Key), response.Pull{
-		Type:         response.PULL,
+	if err := m.broker.Publish(broker.ClientSocket, broker.Detail(down.Key), response.Signal{
+		Type:         response.SIGNAL,
 		ConnectionID: down.ConnectionID,
-		SDP:          serverSDP,
+		SignalType:   "answer",
+		SignalData:   serverSDP,
 	}); err != nil {
 		log.Printf("failed to publish down response: %v", err)
 		return
 	}
+}
+
+// handleClear handles a close event.
+func (m *Media) handleClear(event any) {
+	clr, ok := event.(message.Clear)
+	if !ok {
+		log.Printf("failed to cast event to Closed: %v", event)
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conn, ok := m.connections[clr.ConnectionID]
+	if !ok {
+		log.Printf("connection not found: %s", clr.ConnectionID)
+		return
+	}
+	log.Printf("Media: closing connection: %s", clr.ConnectionID)
+	if err := conn.Close(); err != nil {
+		log.Printf("failed to clr connection: %v", err)
+	}
+	delete(m.connections, clr.ConnectionID)
 }
 
 // AddUpstream creates a new upstream connection and adds it to the channel.
@@ -207,26 +236,28 @@ func (m *Media) setDownstream(conn *webrtc.PeerConnection, streamID string) erro
 // publishStateChange publishes the state change of a connection.
 func (m *Media) publishStateChange(conn *webrtc.PeerConnection, connectionID string) {
 	conn.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("Channel %s: ICE Connection State has changed to %s", connectionID, state.String())
+		//log.Printf("Peer %s: ICE Peer State has changed to %s", connectionID, state.String())
 		switch state {
 		case webrtc.PeerConnectionStateConnected:
-			log.Printf("Channel %s: Connected", connectionID)
+			log.Printf("Media: connection %s: Connected", connectionID)
+			m.metric.IncrementWebRTCConnections()
 			if err := m.broker.Publish(broker.Media, broker.CONNECTED, message.Connected{
 				ConnectionID: connectionID,
 			}); err != nil {
 				log.Printf("failed to publish connected message: %v", err)
 			}
 		case webrtc.PeerConnectionStateClosed:
-			log.Printf("Channel %s: Closed", connectionID)
-			if err := m.broker.Publish(broker.Media, broker.DISCONNECTED, message.Disconnected{
-				ConnectionID: connectionID,
-			}); err != nil {
-				log.Printf("failed to publish disconnected message: %v", err)
-			}
+			log.Printf("Media: connection %s: Closed", connectionID)
+			m.metric.DecrementWebRTCConnections()
+			//if err := m.broker.Publish(broker.Media, broker.DISCONNECTED, message.Disconnected{
+			//	ConnectionID: connectionID,
+			//}); err != nil {
+			//	log.Printf("failed to publish disconnected message: %v", err)
+			//}
 		case webrtc.PeerConnectionStateDisconnected:
-			log.Printf("Channel %s: Disconnected", connectionID)
+			log.Printf("Media: connection %s: Disconnected", connectionID)
 		case webrtc.PeerConnectionStateFailed:
-			log.Printf("Channel %s: Failed", connectionID)
+			log.Printf("Media: connection %s: Failed", connectionID)
 		default:
 		}
 	})

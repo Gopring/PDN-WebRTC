@@ -1,6 +1,18 @@
 // Package message provides data types for broker message.
 package message
 
+// Activate is data type for deactivating user
+type Activate struct {
+	ChannelID string
+	ClientID  string
+}
+
+// Deactivate is data type for deactivating user
+type Deactivate struct {
+	ChannelID string
+	ClientID  string
+}
+
 // Push is data type for broker push
 type Push struct {
 	ConnectionID string
@@ -42,18 +54,12 @@ type Disconnected struct {
 	ConnectionID string
 }
 
-// Succeed is data type for forwarding succeed
-type Succeed struct {
-	ConnectionID string
-	ChannelID    string
-	From         string
-	To           string
-}
-
 // Failed is data type for forwarding failed
 type Failed struct {
 	ConnectionID string
-	ChannelID    string
-	From         string
-	To           string
+}
+
+// Clear is data type for clearing connection
+type Clear struct {
+	ConnectionID string
 }

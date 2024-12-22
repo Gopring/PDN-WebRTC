@@ -5,15 +5,17 @@ import "github.com/hashicorp/go-memdb"
 
 const (
 	tblChannels    = "channels"
-	tblUsers       = "users"
+	tblClients     = "clients"
 	tblConnections = "connections"
 )
 
 const (
-	idxChannelID = "id"
-	idxUserID    = "id"
-	idxConnID    = "id"
-	idxConnTo    = "to"
+	idxChannelID       = "id"
+	idxClientID        = "id"
+	idxClientChannelID = "channel_id"
+	idxConnID          = "id"
+	idxConnTo          = "to"
+	idxConnFrom        = "from"
 )
 
 // schema is the schema of the memory database.
@@ -29,11 +31,11 @@ var schema = &memdb.DBSchema{
 				},
 			},
 		},
-		tblUsers: {
-			Name: tblUsers,
+		tblClients: {
+			Name: tblClients,
 			Indexes: map[string]*memdb.IndexSchema{
-				idxUserID: {
-					Name:   idxUserID,
+				idxClientID: {
+					Name:   idxClientID,
 					Unique: true,
 					Indexer: &memdb.CompoundIndex{
 						Indexes: []memdb.Indexer{
@@ -41,6 +43,11 @@ var schema = &memdb.DBSchema{
 							&memdb.StringFieldIndex{Field: "ID"},
 						},
 					},
+				},
+				idxClientChannelID: {
+					Name:    idxClientChannelID,
+					Unique:  false,
+					Indexer: &memdb.StringFieldIndex{Field: "ChannelID"},
 				},
 			},
 		},
@@ -59,6 +66,16 @@ var schema = &memdb.DBSchema{
 						Indexes: []memdb.Indexer{
 							&memdb.StringFieldIndex{Field: "ChannelID"},
 							&memdb.StringFieldIndex{Field: "To"},
+						},
+					},
+				},
+				idxConnFrom: {
+					Name:   idxConnFrom,
+					Unique: false,
+					Indexer: &memdb.CompoundIndex{
+						Indexes: []memdb.Indexer{
+							&memdb.StringFieldIndex{Field: "ChannelID"},
+							&memdb.StringFieldIndex{Field: "From"},
 						},
 					},
 				},

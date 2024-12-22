@@ -15,7 +15,7 @@ type DB struct {
 }
 
 // New creates a new memory-backed database.
-func New(setDefaultChannel bool) *DB {
+func New(config database.Config) *DB {
 	db, err := memdb.NewMemDB(schema)
 	if err != nil {
 		panic(err)
@@ -23,7 +23,7 @@ func New(setDefaultChannel bool) *DB {
 	newDB := &DB{
 		db: db,
 	}
-	if setDefaultChannel {
+	if config.SetDefaultChannel {
 		if err := newDB.EnsureDefaultChannelInfo(database.DefaultChannelID, database.DefaultChannelKey); err != nil {
 			panic(err)
 		}
@@ -74,7 +74,7 @@ func (d *DB) FindChannelInfoByID(id string) (*database.ChannelInfo, error) {
 func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
-	existing, err := txn.First(tblUsers, idxUserID, channelID, clientID)
+	existing, err := txn.First(tblClients, idxClientID, channelID, clientID)
 	if err != nil {
 		return fmt.Errorf("find user by username: %w", err)
 	}
@@ -88,50 +88,123 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 		Class:     database.Candidate,
 		CreatedAt: time.Now(),
 	}
-	if err := txn.Insert(tblUsers, info); err != nil {
+	if err := txn.Insert(tblClients, info); err != nil {
 		return fmt.Errorf("insert user: %w", err)
 	}
 	txn.Commit()
 	return nil
 }
 
-// FindClientInfoToForward  finds a client by their ID.
-func (d *DB) FindClientInfoToForward(channelID string, to string) (*database.ClientInfo, error) {
+// FindClientInfoByID finds a user by their ID.
+func (d *DB) FindClientInfoByID(channelID, clientID string) (*database.ClientInfo, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
-	iter, err := txn.Get(tblUsers, idxUserID, channelID)
+	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("%s: %w", clientID, database.ErrClientNotFound)
+	}
+	return raw.(*database.ClientInfo).DeepCopy(), nil
+}
+
+// FindForwarderInfo  finds a client by their ID.
+func (d *DB) FindForwarderInfo(channelID string, fetcher string, maxForwardNum int) (*database.ClientInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(tblClients, idxClientChannelID, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("find user by username: %w", err)
 	}
 
+	// TODO(window9u): We should implement a better algorithm to find the forwarder. This is a naive implementation and
+	// makes (N+1) queries to the database.
 	for {
 		raw := iter.Next()
 		if raw == nil {
 			break
 		}
-		info := raw.(*database.ClientInfo)
-		if info.Class != database.Fetcher && info.ID != to {
-			return info, nil
+		candidate := raw.(*database.ClientInfo)
+		if !candidate.CanForward() || candidate.ID == fetcher {
+			continue
 		}
-	}
 
+		// Forward should bee pull connection by server.
+		r, err := txn.First(tblConnections, idxConnTo, channelID, candidate.ID)
+		if err != nil {
+			return nil, fmt.Errorf("find connection by connectionID: %w", err)
+		} else if r == nil {
+			continue
+		}
+
+		conn := r.(*database.ConnectionInfo).DeepCopy()
+		if conn == nil || conn.IsPeerConnection() {
+			continue
+		}
+
+		// Forwarder number should be less than maxForwardNum.
+
+		it, err := txn.Get(tblConnections, idxConnFrom, channelID, candidate.ID)
+		if err != nil {
+			return nil, fmt.Errorf("find connection by connectionID: %w", err)
+		}
+		count := 0
+		for {
+			r := it.Next()
+			if r == nil {
+				break
+			}
+			count++
+			if count > maxForwardNum {
+				break
+			}
+		}
+
+		if count > maxForwardNum {
+			continue
+		}
+
+		return candidate.DeepCopy(), nil
+	}
 	return nil, nil
+}
+
+// UpdateClientInfo updates the user class.
+func (d *DB) UpdateClientInfo(channelID, clientID string, class int) (*database.ClientInfo, error) {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
+	}
+	info := raw.(*database.ClientInfo).DeepCopy()
+	info.Class = class
+	if err := txn.Insert(tblClients, info); err != nil {
+		return nil, fmt.Errorf("insert user: %w", err)
+	}
+	txn.Commit()
+	return info, nil
 }
 
 // DeleteClientInfoByID deletes a user by their ID.
 func (d *DB) DeleteClientInfoByID(channelID, clientID string) error {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
-	raw, err := txn.First(tblUsers, idxUserID, channelID, clientID)
+	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
 	if err != nil {
 		return fmt.Errorf("find user by username: %w", err)
 	}
 	if raw == nil {
 		return fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
 	}
-	if err := txn.Delete(tblUsers, raw); err != nil {
+	if err := txn.Delete(tblClients, raw); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
+	txn.Commit()
 	return nil
 }
 
@@ -157,12 +230,13 @@ func (d *DB) CreatePushConnectionInfo(channelID, clientID, connectionID string) 
 	}
 
 	newConn := &database.ConnectionInfo{
-		ID:                  connectionID,
-		ChannelID:           channelID,
-		From:                clientID,
-		To:                  database.MediaServerID,
-		IsConnectWithServer: true,
-		CreatedAt:           time.Now(),
+		ID:        connectionID,
+		ChannelID: channelID,
+		From:      clientID,
+		To:        database.MediaServerID,
+		Status:    database.Initialized,
+		Type:      database.PushToServer,
+		CreatedAt: time.Now(),
 	}
 
 	if err := txn.Insert(tblConnections, newConn); err != nil {
@@ -185,12 +259,13 @@ func (d *DB) CreatePullConnectionInfo(channelID, clientID, connectionID string) 
 	}
 
 	newConn := &database.ConnectionInfo{
-		ID:                  connectionID,
-		ChannelID:           channelID,
-		IsConnectWithServer: true,
-		From:                database.MediaServerID,
-		To:                  clientID,
-		CreatedAt:           time.Now(),
+		ID:        connectionID,
+		ChannelID: channelID,
+		From:      database.MediaServerID,
+		To:        clientID,
+		Status:    database.Initialized,
+		Type:      database.PullFromServer,
+		CreatedAt: time.Now(),
 	}
 
 	if err := txn.Insert(tblConnections, newConn); err != nil {
@@ -212,13 +287,13 @@ func (d *DB) CreatePeerConnectionInfo(channelID, from, to, connectionID string) 
 		return nil, fmt.Errorf("%s: %w", from, database.ErrConnectionAlreadyExists)
 	}
 	newConn := &database.ConnectionInfo{
-		ID:                  connectionID,
-		ChannelID:           channelID,
-		From:                from,
-		To:                  to,
-		IsConnectWithServer: false,
-		IsConnected:         false,
-		CreatedAt:           time.Now(),
+		ID:        connectionID,
+		ChannelID: channelID,
+		From:      from,
+		To:        to,
+		Status:    database.Initialized,
+		Type:      database.PeerToPeer,
+		CreatedAt: time.Now(),
 	}
 	if err := txn.Insert(tblConnections, newConn); err != nil {
 		return nil, fmt.Errorf("insert connection: %w", err)
@@ -229,7 +304,7 @@ func (d *DB) CreatePeerConnectionInfo(channelID, from, to, connectionID string) 
 
 // FindUpstreamInfo finds an upstream connection by its channel ID.
 func (d *DB) FindUpstreamInfo(channelID string) (*database.ConnectionInfo, error) {
-	txn := d.db.Txn(true)
+	txn := d.db.Txn(false)
 	defer txn.Abort()
 	raw, err := txn.First(tblConnections, idxConnTo, channelID, database.MediaServerID)
 	if err != nil {
@@ -241,22 +316,115 @@ func (d *DB) FindUpstreamInfo(channelID string) (*database.ConnectionInfo, error
 	return raw.(*database.ConnectionInfo).DeepCopy(), nil
 }
 
+// FindDownstreamInfo finds a downstream connection by its channel ID and client ID.
+func (d *DB) FindDownstreamInfo(channelID, to string) (*database.ConnectionInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(tblConnections, idxConnTo, channelID, to)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		info := raw.(*database.ConnectionInfo)
+		if info.IsDownstream() {
+			return info.DeepCopy(), nil
+		}
+	}
+	return nil, database.ErrConnectionNotFound
+}
+
+// FindConnectionInfoByFrom finds a connection by its from field.
+func (d *DB) FindConnectionInfoByFrom(channelID, from string) ([]*database.ConnectionInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(tblConnections, idxConnFrom, channelID, from)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	var connections []*database.ConnectionInfo
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		info := raw.(*database.ConnectionInfo)
+		connections = append(connections, info.DeepCopy())
+	}
+	return connections, nil
+}
+
+// FindConnectionInfoByTo finds a connection by its to field.
+func (d *DB) FindConnectionInfoByTo(channelID, to string) ([]*database.ConnectionInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(tblConnections, idxConnTo, channelID, to)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	var connections []*database.ConnectionInfo
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		info := raw.(*database.ConnectionInfo)
+		connections = append(connections, info.DeepCopy())
+	}
+	return connections, nil
+}
+
+// FindConnectionInfoByID finds a connection by its ID.
+func (d *DB) FindConnectionInfoByID(ConnectionID string) (*database.ConnectionInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	raw, err := txn.First(tblConnections, idxConnID, ConnectionID)
+	if err != nil {
+		return nil, fmt.Errorf("find connection by connectionID: %w", err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("%s: %w", ConnectionID, database.ErrConnectionNotFound)
+	}
+	return raw.(*database.ConnectionInfo).DeepCopy(), nil
+}
+
 // UpdateConnectionInfo updates the connection status.
-func (d *DB) UpdateConnectionInfo(connected bool, connectionID string) error {
+func (d *DB) UpdateConnectionInfo(connectionID string, status int) (*database.ConnectionInfo, error) {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
 	raw, err := txn.First(tblConnections, idxConnID, connectionID)
 	if err != nil {
-		return fmt.Errorf("find user by username: %w", err)
+		return nil, fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("%s: %w", connectionID, database.ErrConnectionNotFound)
+	}
+	info := raw.(*database.ConnectionInfo).DeepCopy()
+	info.Status = status
+	info.ConnectedAt = time.Now()
+	if err := txn.Insert(tblConnections, info); err != nil {
+		return nil, fmt.Errorf("insert connection: %w", err)
+	}
+	txn.Commit()
+	return info, nil
+}
+
+// DeleteConnectionInfoByID deletes a connection by its ID.
+func (d *DB) DeleteConnectionInfoByID(connectionID string) error {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblConnections, idxConnID, connectionID)
+	if err != nil {
+		return fmt.Errorf("find connection by connectionID: %w", err)
 	}
 	if raw == nil {
 		return fmt.Errorf("%s: %w", connectionID, database.ErrConnectionNotFound)
 	}
-	info := raw.(*database.ConnectionInfo).DeepCopy()
-	info.IsConnected = connected
-	info.ConnectedAt = time.Now()
-	if err := txn.Insert(tblConnections, info); err != nil {
-		return fmt.Errorf("insert connection: %w", err)
+	if err := txn.Delete(tblConnections, raw); err != nil {
+		return fmt.Errorf("delete connection: %w", err)
 	}
 	txn.Commit()
 	return nil
