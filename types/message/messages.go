@@ -63,3 +63,16 @@ type Failed struct {
 type Clear struct {
 	ConnectionID string
 }
+
+// ClassifyRequest represents a request message to start the classification process.
+type ClassifyRequest struct {
+	ChannelID string
+}
+
+// ClassifyResult represents the result of a classification.
+type ClassifyResult struct {
+	ConnectionID string
+	ChannelID    string
+	PeerID       string
+	Success      bool
+}
