@@ -21,20 +21,23 @@ const (
 	Client
 	Media
 	Peer
+	Classification
 )
 
 // Detail constants for message details.
 const (
-	ACTIVATE     Detail = "ACTIVATE"
-	DEACTIVATE   Detail = "DEACTIVATE"
-	PUSH         Detail = "PUSH"
-	PULL         Detail = "PULL"
-	UPSTREAM     Detail = "UPSTREAM"
-	DOWNSTREAM   Detail = "DOWNSTREAM"
-	CONNECTED    Detail = "CONNECTED"
-	DISCONNECTED Detail = "DISCONNECTED"
-	FAILED       Detail = "FAILED"
-	CLEAR        Detail = "CLEAR"
+	ACTIVATE       Detail = "ACTIVATE"
+	DEACTIVATE     Detail = "DEACTIVATE"
+	PUSH           Detail = "PUSH"
+	PULL           Detail = "PULL"
+	UPSTREAM       Detail = "UPSTREAM"
+	DOWNSTREAM     Detail = "DOWNSTREAM"
+	CONNECTED      Detail = "CONNECTED"
+	DISCONNECTED   Detail = "DISCONNECTED"
+	FAILED         Detail = "FAILED"
+	CLEAR          Detail = "CLEAR"
+	CLASSIFY       Detail = "CLASSIFY"
+	CLASSIFYRESULT Detail = "CLASSIFYRESULT"
 )
 
 // Broker is a message broker that manages message channels and subscriptions.
@@ -119,6 +122,8 @@ func (t Topic) String() string {
 		return "Client"
 	case Media:
 		return "Media"
+	case Classification:
+		return "Classification"
 	default:
 		return "Unknown"
 	}
