@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"pdn/classifier"
 	"pdn/coordinator"
 	"pdn/database"
 	"pdn/metric"
@@ -45,6 +46,7 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 	db := database.Config{}
 	cor := coordinator.Config{}
 	met := metric.Config{}
+	clf := classifier.Config{}
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.SetOutput(w)
 	fs.IntVar(&sig.Port, "port", signal.DefaultPort, "listening port")
@@ -58,7 +60,8 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
 	fs.IntVar(&met.Port, "metricPort", metric.DefaultMetricsPort, "listening port")
 	fs.StringVar(&met.Path, "metricPath", metric.DefaultMetricsPath, "metrics path")
-
+	fs.DurationVar(&clf.TimeoutDuration, "timeout", classifier.DefaultTimeoutDuration,
+		"timeout duration for classification")
 	err := fs.Parse(args)
 	if err != nil {
 		return pdn.Config{}, fmt.Errorf("failed to parse args: %w", err)
@@ -73,5 +76,6 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		Database:    db,
 		Coordinator: cor,
 		Metrics:     met,
+		Classifier:  clf,
 	}, nil
 }
