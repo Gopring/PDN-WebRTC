@@ -83,10 +83,12 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	}
 
 	info := &database.ClientInfo{
-		ChannelID: channelID,
-		ID:        clientID,
-		Class:     database.Candidate,
-		CreatedAt: time.Now(),
+		ChannelID:       channelID,
+		ID:              clientID,
+		Class:           database.Candidate,
+		ConnectionCount: 0,
+		CreatedAt:       time.Now(),
+		LastUpdated:     time.Now(),
 	}
 	if err := txn.Insert(tblClients, info); err != nil {
 		return fmt.Errorf("insert user: %w", err)
@@ -95,8 +97,8 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	return nil
 }
 
-// FindClientInfoByID finds a user by their ID.
-func (d *DB) FindClientInfoByID(channelID, clientID string) (*database.ClientInfo, error) {
+// findClientInfoByID finds a user by their ID.
+func (d *DB) findClientInfoByID(channelID, clientID string) (*database.ClientInfo, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
 	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
@@ -109,85 +111,67 @@ func (d *DB) FindClientInfoByID(channelID, clientID string) (*database.ClientInf
 	return raw.(*database.ClientInfo).DeepCopy(), nil
 }
 
-// FindForwarderInfo  finds a client by their ID.
-func (d *DB) FindForwarderInfo(channelID string, fetcher string, maxForwardNum int) (*database.ClientInfo, error) {
-	txn := d.db.Txn(false)
-	defer txn.Abort()
-	iter, err := txn.Get(tblClients, idxClientChannelID, channelID)
-	if err != nil {
-		return nil, fmt.Errorf("find user by username: %w", err)
-	}
-
-	// TODO(window9u): We should implement a better algorithm to find the forwarder. This is a naive implementation and
-	// makes (N+1) queries to the database.
-	for {
-		raw := iter.Next()
-		if raw == nil {
-			break
-		}
-		candidate := raw.(*database.ClientInfo)
-		if !candidate.CanForward() || candidate.ID == fetcher {
-			continue
-		}
-
-		// Forward should bee pull connection by server.
-		r, err := txn.First(tblConnections, idxConnTo, channelID, candidate.ID)
-		if err != nil {
-			return nil, fmt.Errorf("find connection by connectionID: %w", err)
-		} else if r == nil {
-			continue
-		}
-
-		conn := r.(*database.ConnectionInfo).DeepCopy()
-		if conn == nil || conn.IsPeerConnection() {
-			continue
-		}
-
-		// Forwarder number should be less than maxForwardNum.
-
-		it, err := txn.Get(tblConnections, idxConnFrom, channelID, candidate.ID)
-		if err != nil {
-			return nil, fmt.Errorf("find connection by connectionID: %w", err)
-		}
-		count := 0
-		for {
-			r := it.Next()
-			if r == nil {
-				break
-			}
-			count++
-			if count > maxForwardNum {
-				break
-			}
-		}
-
-		if count > maxForwardNum {
-			continue
-		}
-
-		return candidate.DeepCopy(), nil
-	}
-	return nil, nil
-}
-
-// UpdateClientInfo updates the user class.
-func (d *DB) UpdateClientInfo(channelID, clientID string, class int) (*database.ClientInfo, error) {
+// UpdateClientInfoClass updates the user class.
+func (d *DB) UpdateClientInfoClass(channelID string, clientID string, class int) error {
 	txn := d.db.Txn(true)
 	defer txn.Abort()
 	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
 	if err != nil {
-		return nil, fmt.Errorf("find user by username: %w", err)
+		return fmt.Errorf("find user by username: %w", err)
 	}
 	if raw == nil {
-		return nil, fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
+		return fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
 	}
 	info := raw.(*database.ClientInfo).DeepCopy()
-	info.Class = class
+	info.UpdateClass(class)
+	info.UpdateLastUpdated()
 	if err := txn.Insert(tblClients, info); err != nil {
-		return nil, fmt.Errorf("insert user: %w", err)
+		return fmt.Errorf("insert user: %w", err)
 	}
 	txn.Commit()
-	return info, nil
+	return nil
+}
+
+// IncreaseClientInfoConnCount updates the connection count + 1.
+func (d *DB) IncreaseClientInfoConnCount(channelID string, clientID string) error {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
+	if err != nil {
+		return fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
+	}
+	info := raw.(*database.ClientInfo).DeepCopy()
+	info.IncreaseConnectionCount()
+	info.UpdateLastUpdated()
+	if err := txn.Insert(tblClients, info); err != nil {
+		return fmt.Errorf("insert user: %w", err)
+	}
+	txn.Commit()
+	return nil
+}
+
+// DecreaseClientInfoConnCount updates the connection count - 1.
+func (d *DB) DecreaseClientInfoConnCount(channelID string, clientID string) error {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
+	if err != nil {
+		return fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
+	}
+	info := raw.(*database.ClientInfo).DeepCopy()
+	info.DecreaseConnectionCount()
+	info.UpdateLastUpdated()
+	if err := txn.Insert(tblClients, info); err != nil {
+		return fmt.Errorf("insert user: %w", err)
+	}
+	txn.Commit()
+	return nil
 }
 
 // DeleteClientInfoByID deletes a user by their ID.
@@ -206,6 +190,31 @@ func (d *DB) DeleteClientInfoByID(channelID, clientID string) error {
 	}
 	txn.Commit()
 	return nil
+}
+
+// FindClientInfoByClass finds a user by their Class.
+func (d *DB) FindClientInfoByClass(channelID string, class int) ([]*database.ClientInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	it, err := txn.Get(tblClients, idxClientChannelID, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching forwarders by channel ID: %w", err)
+	}
+	var results []*database.ClientInfo
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		raw := obj.(*database.ClientInfo)
+
+		if raw.Class == class {
+			clientInfo, err := d.findClientInfoByID(raw.ChannelID, raw.ID)
+			if err != nil {
+				return nil, fmt.Errorf("error fetching client info for forwarder ID %s: %w", raw.ID, err)
+			}
+
+			results = append(results, clientInfo)
+		}
+	}
+
+	return results, nil
 }
 
 // CreatePushConnectionInfo creates a new connection between two users.
@@ -428,4 +437,111 @@ func (d *DB) DeleteConnectionInfoByID(connectionID string) error {
 	}
 	txn.Commit()
 	return nil
+}
+
+// FindForwarderInfo  finds a client by their ID.
+func (d *DB) FindForwarderInfo(channelID string, fetcher string, maxForwardNum int) (*database.ClientInfo, error) {
+	weights := map[string]float64{
+		"connectionCount": 1.0, // example weight for connectionCount
+		"createdTime":     0.5, // example weight for createdTime
+		"networkSpeed":    0.5, // example weight for networkSpeed
+		"packetLossRate":  0.3, // example weight for packetLossRate
+		// Todo: insert more fields
+	}
+	optimalForwarder, err := d.findOptimalForwarder(channelID, fetcher, maxForwardNum, weights)
+	if err == nil && optimalForwarder != nil {
+		clientInfo, err := d.findClientInfoByID(optimalForwarder.ChannelID, optimalForwarder.ID)
+		if err == nil {
+			return clientInfo, nil
+		}
+		log.Printf("error in converting optimal forwarder to client info: %v", err)
+	}
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	return nil, nil
+}
+
+// findOptimalForwarder finds the best forwarder based on provided metrics and weights.
+// User whose class is Forwarder or Potential Forwarder should be chosen.
+func (d *DB) findOptimalForwarder(channelID, fetcher string, maxForwardNum int, weights map[string]float64) (*database.ClientInfo, error) { //nolint:lll
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+
+	iter, err := txn.Get(tblClients, idxClientChannelID, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("find forwarders by channelID: %w", err)
+	}
+
+	var bestForwarder *database.ClientInfo
+	var bestScore float64
+
+	log.Printf("Starting optimal forwarder selection for channel: %s", channelID)
+
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		candidate := raw.(*database.ClientInfo)
+
+		log.Printf("Checking candidate: ID=%s, CanForward=%t, Class=%d, Fetcher=%s", candidate.ID, candidate.CanForward(), candidate.Class, fetcher) //nolint:lll
+
+		if !candidate.CanForward() || candidate.ID == fetcher || candidate.ConnectionCount > maxForwardNum {
+			log.Printf("Candidate %s skipped: Cannot forward or is fetcher", candidate.ID)
+			continue
+		}
+
+		// Calculate the score using weights and available metrics
+		score := calculateScore(candidate, weights)
+
+		if bestForwarder == nil || score > bestScore {
+			bestForwarder = candidate.DeepCopy()
+			bestScore = score
+		}
+	}
+
+	if bestForwarder == nil {
+		log.Printf("no suitable forwarder found for channel %s", channelID)
+		return nil, nil
+	}
+	log.Printf("Selected Best Forwarder: ID=%s, ChannelID=%s, Score=%f",
+		bestForwarder.ID, bestForwarder.ChannelID, bestScore)
+	return bestForwarder, nil
+}
+
+// calculateScore dynamically calculates the score based on available metrics and weights.
+func calculateScore(forwarder *database.ClientInfo, weights map[string]float64) float64 {
+	score := 0.0
+	// Assign base scores based on role
+	roleScores := map[int]float64{
+		database.Forwarder:          5.0,
+		database.PotentialForwarder: 3.0,
+		database.Candidate:          0.0,
+	}
+	// Add role score if applicable
+	if baseScore, ok := roleScores[forwarder.Class]; ok {
+		score += baseScore
+	}
+	// Check if weights are provided for each metric, then calculate the score
+	if weight, ok := weights["connectionCount"]; ok {
+		score += weight / float64(forwarder.ConnectionCount+1) // Avoid division by zero
+	}
+	if weight, ok := weights["createdTime"]; ok {
+		// Add score based on how long the forwarder has existed
+		elapsedTime := time.Since(forwarder.CreatedAt).Minutes() // Minutes since creation
+		score += weight * elapsedTime
+	}
+
+	if weight, ok := weights["networkSpeed"]; ok {
+		// Replace forwarder.NetworkSpeed when implemented
+		networkSpeed := float64(0)
+		score += weight * networkSpeed
+	}
+	if weight, ok := weights["packetLossRate"]; ok {
+		// Replace forwarder.PacketLossRate when implemented
+		packetLossRate := float64(0)
+		score -= weight * packetLossRate
+	}
+
+	return score
 }
