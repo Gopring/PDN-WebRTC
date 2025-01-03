@@ -2,6 +2,7 @@
 package classifier
 
 import (
+	"fmt"
 	"github.com/lithammer/shortuuid/v4"
 	"log"
 	"pdn/broker"
@@ -11,7 +12,6 @@ import (
 )
 
 // Classifier is responsible for managing the classification of
-// clients into different roles (e.g., forwarders, fetchers).
 type Classifier struct {
 	config   Config
 	broker   *broker.Broker
@@ -20,9 +20,6 @@ type Classifier struct {
 
 // New creates a new instance of Classifier.
 func New(c Config, b *broker.Broker, db database.Database) *Classifier {
-	if c.TimeoutDuration == 0 {
-		c.TimeoutDuration = DefaultTimeoutDuration
-	}
 	return &Classifier{
 		config:   c,
 		broker:   b,
@@ -32,36 +29,44 @@ func New(c Config, b *broker.Broker, db database.Database) *Classifier {
 
 // Start starts the Classifier instance.
 func (c *Classifier) Start() {
-	classificationEvent := c.broker.Subscribe(broker.Classification, broker.CLASSIFY)
-	classifyResultEvent := c.broker.Subscribe(broker.Classification, broker.CLASSIFYRESULT)
+	mediaConnectedEvent := c.broker.Subscribe(broker.Media, broker.CONNECTED)
+	peerFailedEvent := c.broker.Subscribe(broker.Peer, broker.FAILED)
+	classifyResultEvent := c.broker.Subscribe(broker.Classification, broker.CLASSIFIED)
+	peerConnectedEvent := c.broker.Subscribe(broker.Peer, broker.CONNECTED)
+
 	for {
 		select {
-		case event := <-classificationEvent.Receive():
-			go c.handleClassification(event)
+		case event := <-mediaConnectedEvent.Receive():
+			go c.handleMediaConnected(event)
+		case event := <-peerFailedEvent.Receive():
+			go c.handlePeerFailed(event)
 		case event := <-classifyResultEvent.Receive():
 			go c.handleClassifyResult(event)
+		case event := <-peerConnectedEvent.Receive():
+			go c.handlePeerConnected(event)
 		}
 	}
 }
 
-// ClassifyPotentialForwarders identifies and classifies potential forwarders in a given channel.
-// It attempts to connect potential forwarders with fetchers using a round-robin mechanism to ensure
-// that fetchers are evenly distributed among potential forwarders.
-// The round-robin approach ensures that no single fetcher is overloaded and that all fetchers
-// are utilized fairly during the classification process.
-func (c *Classifier) handleClassification(event any) {
-	msg, ok := event.(message.ClassifyRequest)
+// handleMediaConnected handles events when a media connection is successfully established.
+func (c *Classifier) handleMediaConnected(event any) {
+	msg, ok := event.(message.Connected)
 	if !ok {
 		log.Printf("Invalid classification request: %v", event)
 		return
 	}
-	potentialForwarders, err := c.database.FindClientInfoByClass(msg.ChannelID, database.PotentialForwarder)
+	connInfo, err := c.database.FindConnectionInfoByID(msg.ConnectionID)
+	if err != nil {
+		log.Printf("error occurs in finding connection info by connection id %v", err)
+		return
+	}
+	potentialForwarders, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.PotentialForwarder)
 	if err != nil {
 		log.Printf("Error fetching potential forwarders: %v", err)
 		return
 	}
 
-	fetchers, err := c.database.FindClientInfoByClass(msg.ChannelID, database.Fetcher)
+	fetchers, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Fetcher)
 	if err != nil {
 		log.Printf("Error fetching fetchers: %v", err)
 		return
@@ -79,36 +84,118 @@ func (c *Classifier) handleClassification(event any) {
 			currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
 
 			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", potential.ID, fetcher.ID)
-			c.classify(potential, fetcher)
+			if err := c.classify(potential, fetcher); err != nil {
+				return
+			}
 		}
 	}
 }
 
+// handlePeerFailed handles events when a peer connection attempt fails.
+func (c *Classifier) handlePeerFailed(event any) {
+	msg, ok := event.(message.Failed)
+	if !ok {
+		log.Printf("error occurs in parsing failed message %v", event)
+		return
+	}
+
+	connInfo, err := c.database.FindConnectionInfoByID(msg.ConnectionID)
+	if err != nil {
+		log.Printf("error occurs in finding connection info by connection id %v", err)
+		return
+	}
+
+	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.Fetcher); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+		return
+	}
+
+	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.Fetcher); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+		return
+	}
+
+	potentialForwarders, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.PotentialForwarder)
+	if err != nil {
+		log.Printf("Error fetching potential forwarders: %v", err)
+		return
+	}
+
+	fetchers, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Fetcher)
+	if err != nil {
+		log.Printf("Error fetching fetchers: %v", err)
+		return
+	}
+
+	if len(fetchers) == 0 {
+		log.Println("No fetchers available for classification.")
+		return
+	}
+
+	currentFetcherIndex := 0
+	for _, potential := range potentialForwarders {
+		for i := 0; i < len(fetchers); i++ {
+			fetcher := fetchers[currentFetcherIndex]
+			currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
+
+			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", potential.ID, fetcher.ID)
+			if err := c.classify(potential, fetcher); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// handlePeerConnected handles events when a peer-to-peer connection is successfully established.
+func (c *Classifier) handlePeerConnected(event any) {
+	msg, ok := event.(message.Connected)
+	if !ok {
+		log.Printf("error occurs in parsing failed message %v", event)
+		return
+	}
+	connInfo, _ := c.database.FindConnectionInfoByID(msg.ConnectionID)
+	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.PotentialForwarder); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+	}
+	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.PotentialForwarder); err != nil { //nolint:lll
+		log.Printf("error occurs in updating client info %v", err)
+	}
+}
+
 // classify attempts to establish a connection between a potential forwarder and a fetcher.
-func (c *Classifier) classify(forwarder *database.ClientInfo, fetcher *database.ClientInfo) {
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.ClassifyFetch{
-		Type:         response.CLASSIFYFETCH,
-		PeerID:       forwarder.ID,
-		ConnectionID: shortuuid.New(),
+func (c *Classifier) classify(forwarder *database.ClientInfo, fetcher *database.ClientInfo) error {
+
+	classifyConn, err := c.database.CreateClassifyConnectionInfo(fetcher.ChannelID, forwarder.ID, fetcher.ID, shortuuid.New()) //nolint:lll
+	if err != nil {
+		return fmt.Errorf("error occurs in creating peer connection info %v", err)
+	}
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.Classified{
+		Type:         response.CLASSIFIED,
+		ConnectionID: classifyConn.ID,
 	}); err != nil {
 		log.Printf("error occurs in publishing fetch message %v", err)
 	}
+	return nil
 }
 
 // handleClassifyResult processes classification results from fetchers.
 func (c *Classifier) handleClassifyResult(event any) {
-	result, ok := event.(message.ClassifyResult)
+	msg, ok := event.(message.Classified)
 	if !ok {
 		log.Printf("Invalid classify result: %v", event)
 		return
 	}
-
-	if result.Success {
-		log.Printf("PeerID %s classified successfully as Forwarder", result.PeerID)
-		c.promoteToForwarder(result.PeerID, result.ChannelID)
+	connInfo, err := c.database.FindConnectionInfoByID(msg.ConnectionID)
+	if err != nil {
+		log.Printf("error occurs in finding connection info by connection id %v", err)
+		return
+	}
+	if msg.Success {
+		log.Printf("PeerID %s classified successfully as Forwarder", connInfo.From)
+		c.promoteToForwarder(connInfo.From, msg.ChannelID)
 	} else {
-		log.Printf("PeerID %s classification failed, demoting to Fetcher", result.PeerID)
-		c.demoteToFetcher(result.PeerID, result.ChannelID)
+		log.Printf("PeerID %s classification failed, demoting to Fetcher", connInfo.From)
+		c.demoteToFetcher(connInfo.From, msg.ChannelID)
 	}
 }
 
