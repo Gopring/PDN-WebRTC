@@ -15,6 +15,7 @@ const (
 	PushToServer = iota
 	PullFromServer
 	PeerToPeer
+	Classify
 )
 
 // ConnectionInfo is a struct for WebRTC connection information.
