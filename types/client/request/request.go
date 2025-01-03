@@ -8,12 +8,12 @@ const (
 	ACTIVATE     = "ACTIVATE"
 	PUSH         = "PUSH"
 	PULL         = "PULL"
-	FORWARD      = "FORWARD"
+	FORWARDING   = "FORWARDING"
 	SIGNAL       = "SIGNAL"
-	CONNECTED    = "CONNECTED"
+	FORWARDED    = "FORWARDED"
 	DISCONNECTED = "DISCONNECTED"
 	FAILED       = "FAILED"
-	CLASSIFY     = "CLASSIFY"
+	CLASSIFYING  = "CLASSIFYING"
 	CLASSIFIED   = "CLASSIFIED"
 )
 
@@ -42,8 +42,8 @@ type Pull struct {
 	SDP          string `json:"sdp"`
 }
 
-// Forward is data type for push stream
-type Forward struct {
+// Forwarding is data type for push stream
+type Forwarding struct {
 	ConnectionID string `json:"connection_id"`
 	SDP          string `json:"sdp"`
 }
@@ -55,8 +55,8 @@ type Signal struct {
 	SignalData   string `json:"signal_data"`
 }
 
-// Connected is data type for success response
-type Connected struct {
+// Forwarded is data type for success response
+type Forwarded struct {
 	ConnectionID string `json:"connection_id"`
 }
 
@@ -70,8 +70,8 @@ type Disconnected struct {
 	ConnectionID string `json:"connection_id"`
 }
 
-// Classify is data type for forwarding while classifying
-type Classify struct {
+// Classifying is data type for forwarding while classifying
+type Classifying struct {
 	ConnectionID string `json:"connection_id"`
 	SDP          string `json:"sdp"`
 }

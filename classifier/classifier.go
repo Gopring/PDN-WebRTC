@@ -169,7 +169,7 @@ func (c *Classifier) classify(forwarder *database.ClientInfo, fetcher *database.
 	if err != nil {
 		return fmt.Errorf("error occurs in creating peer connection info %v", err)
 	}
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.Classified{
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.Classifying{
 		Type:         response.CLASSIFIED,
 		ConnectionID: classifyConn.ID,
 	}); err != nil {

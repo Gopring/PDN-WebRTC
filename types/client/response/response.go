@@ -4,7 +4,7 @@ package response
 // Constants for response types
 const (
 	ACTIVATE   = "ACTIVATE"
-	FETCH      = "FETCH"
+	FORWARDING = "FORWARDING"
 	FORWARD    = "FORWARD"
 	CLOSED     = "CLOSED"
 	CLEAR      = "CLEAR"
@@ -19,15 +19,15 @@ type Activate struct {
 	Message string `json:"message"`
 }
 
-// Forward is data type for server sent response to command user forwarding
-type Forward struct {
+// Forwarding is data type for server sent response to command user forwarding
+type Forwarding struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 	SDP          string `json:"sdp"`
 }
 
-// Fetch is data type for server sent response to command user fetching
-type Fetch struct {
+// Forward is data type for server sent response to command user fetching
+type Forward struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 }
@@ -59,8 +59,8 @@ type Classify struct {
 	SDP          string `json:"sdp"`
 }
 
-// Classified is data type for server sent response to command user fetching while classifying
-type Classified struct {
+// Classifying is data type for server sent response to command user fetching while classifying
+type Classifying struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 }

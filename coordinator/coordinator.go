@@ -375,8 +375,8 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 
 	c.metric.IncrementBalancingOccurs()
 
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+fetcherID), response.Fetch{
-		Type:         response.FETCH,
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+fetcherID), response.Forward{
+		Type:         response.FORWARD,
 		ConnectionID: peerConn.ID,
 	}); err != nil {
 		return fmt.Errorf("error occurs in publishing fetch message %v", err)

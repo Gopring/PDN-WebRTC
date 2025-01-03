@@ -158,20 +158,20 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 		err = c.handlePush(req, channelID, userID)
 	case request.PULL:
 		err = c.handlePull(req, channelID, userID)
-	case request.FORWARD:
+	case request.FORWARDING:
 		err = c.handleForward(req, channelID, userID)
 	case request.SIGNAL:
 		err = c.handleSignal(req, channelID, userID)
-	case request.CONNECTED:
-		err = c.handleConnected(req, channelID, userID)
+	case request.FORWARDED:
+		err = c.handleForwarded(req, channelID, userID)
 	case request.DISCONNECTED:
 		err = c.handleDisconnected(req, channelID, userID)
 	case request.FAILED:
 		err = c.handleFailed(req, channelID, userID)
 	case request.CLASSIFIED:
-		err = c.handleClassifyResult(req, channelID)
-	case request.CLASSIFY:
-		err = c.handleClassifyForward(req, channelID, userID)
+		err = c.handleClassified(req, channelID)
+	case request.CLASSIFYING:
+		err = c.handleClassifying(req, channelID, userID)
 	default:
 		err = fmt.Errorf("invalid request type: %s", req.Type)
 	}
@@ -247,7 +247,7 @@ func (c *Controller) handleSignal(req request.Common, channelID, userID string) 
 
 // handleForward handles the forward event. forward event means that a client requests
 func (c *Controller) handleForward(req request.Common, channelID, userID string) error {
-	var payload request.Forward
+	var payload request.Forwarding
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal exchange payload: %w", err)
 	}
@@ -260,8 +260,8 @@ func (c *Controller) handleForward(req request.Common, channelID, userID string)
 	}
 
 	counterpart := connInfo.GetCounterpart(userID)
-	msg := response.Forward{
-		Type:         response.FORWARD,
+	msg := response.Forwarding{
+		Type:         response.FORWARDING,
 		ConnectionID: payload.ConnectionID,
 		SDP:          payload.SDP,
 	}
@@ -271,10 +271,10 @@ func (c *Controller) handleForward(req request.Common, channelID, userID string)
 	return nil
 }
 
-// handleConnected handles the succeed event. succeed event means that a client has successfully
+// handleForwarded handles the succeed event. succeed event means that a client has successfully
 // completed the connection with another client.
-func (c *Controller) handleConnected(req request.Common, channelID, userID string) error {
-	var payload request.Connected
+func (c *Controller) handleForwarded(req request.Common, channelID, userID string) error {
+	var payload request.Forwarded
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal succeed payload: %w", err)
 	}
@@ -339,9 +339,9 @@ func (c *Controller) handleDisconnected(req request.Common, channelID, userID st
 	return nil
 }
 
-// handleClassifyForward handles the forward event while classifying
-func (c *Controller) handleClassifyForward(req request.Common, channelID, userID string) error {
-	var payload request.Classify
+// handleClassifying handles the forward event while classifying
+func (c *Controller) handleClassifying(req request.Common, channelID, userID string) error {
+	var payload request.Classifying
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal signal payload: %w", err)
 	}
@@ -365,8 +365,8 @@ func (c *Controller) handleClassifyForward(req request.Common, channelID, userID
 	return nil
 }
 
-// handleClassifyResult handles the classify result
-func (c *Controller) handleClassifyResult(req request.Common, channelID string) error {
+// handleClassified handles the classify result
+func (c *Controller) handleClassified(req request.Common, channelID string) error {
 	var payload request.Classified
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		log.Printf("Error unmarshalling classify result: %v", err)
