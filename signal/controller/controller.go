@@ -168,12 +168,10 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 		err = c.handleDisconnected(req, channelID, userID)
 	case request.FAILED:
 		err = c.handleFailed(req, channelID, userID)
-	case request.CLASSIFYRESULT:
+	case request.CLASSIFIED:
 		err = c.handleClassifyResult(req, channelID)
-	case request.CLASSIFYFORWARD:
-		err = c.handleClassifyForward(req, channelID)
-	case request.CLASSIFYSIGNAL:
-		err = c.handleClassifySignal(req, channelID)
+	case request.CLASSIFY:
+		err = c.handleClassifyForward(req, channelID, userID)
 	default:
 		err = fmt.Errorf("invalid request type: %s", req.Type)
 	}
@@ -342,14 +340,22 @@ func (c *Controller) handleDisconnected(req request.Common, channelID, userID st
 }
 
 // handleClassifyForward handles the forward event while classifying
-func (c *Controller) handleClassifyForward(req request.Common, channelID string) error {
-	var payload request.ClassifyForward
+func (c *Controller) handleClassifyForward(req request.Common, channelID, userID string) error {
+	var payload request.Classify
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		return fmt.Errorf("failed to unmarshal signal payload: %w", err)
 	}
-	counterpart := payload.PeerID
-	msg := response.ClassifyForward{
-		Type:         response.CLASSIFYFORWARD,
+	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
+	if err != nil {
+		return fmt.Errorf("failed to find connection info: %w", err)
+	}
+	if !connInfo.Authorize(channelID, userID) {
+		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
+	}
+	counterpart := connInfo.GetCounterpart(userID)
+
+	msg := response.Classify{
+		Type:         response.CLASSIFY,
 		ConnectionID: payload.ConnectionID,
 		SDP:          payload.SDP,
 	}
@@ -359,40 +365,20 @@ func (c *Controller) handleClassifyForward(req request.Common, channelID string)
 	return nil
 }
 
-// handleClassifySignal handles the signal event while classifying
-func (c *Controller) handleClassifySignal(req request.Common, channelID string) error {
-	var payload request.ClassifySignal
-	if err := json.Unmarshal(req.Payload, &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal signal payload: %w", err)
-	}
-
-	msg := response.Signal{
-		Type:         response.SIGNAL,
-		ConnectionID: payload.ConnectionID,
-		SignalType:   payload.SignalType,
-		SignalData:   payload.SignalData,
-	}
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+payload.PeerID), msg); err != nil {
-		return fmt.Errorf("failed to publish exchange message: %w", err)
-	}
-	return nil
-}
-
 // handleClassifyResult handles the classify result
 func (c *Controller) handleClassifyResult(req request.Common, channelID string) error {
-	var payload request.ClassifyResult
+	var payload request.Classified
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {
 		log.Printf("Error unmarshalling classify result: %v", err)
 	}
 
-	result := message.ClassifyResult{
+	result := message.Classified{
 		ConnectionID: payload.ConnectionID,
-		PeerID:       payload.PeerID,
 		Success:      payload.Success,
 		ChannelID:    channelID,
 	}
 
-	if err := c.broker.Publish(broker.Classification, broker.CLASSIFYRESULT, result); err != nil {
+	if err := c.broker.Publish(broker.Classification, broker.CLASSIFIED, result); err != nil {
 		log.Printf("Error publishing classify result: %v", err)
 	}
 	return nil
