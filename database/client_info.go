@@ -19,12 +19,21 @@ const (
 	Candidate
 )
 
+const (
+	// SERVER indicates that the stream is being fetched from the server.
+	SERVER = "server"
+
+	// NONE indicates that there is no active fetch connection for the client.
+	NONE = "none"
+)
+
 // ClientInfo is a struct for client information.
 type ClientInfo struct {
 	ID              string
 	ChannelID       string
 	Class           int
 	ConnectionCount int
+	FetchFrom       string
 	CreatedAt       time.Time
 	LastUpdated     time.Time
 	//NetworkUsage   float64   // Network usage (e.g., Mbps)
@@ -47,7 +56,7 @@ func (u *ClientInfo) DecreaseConnectionCount() {
 	u.ConnectionCount = u.ConnectionCount - 1
 }
 
-// UpdateClass updates the class field with the provided value
+// UpdateClass updates the class field with the provided value.
 func (u *ClientInfo) UpdateClass(class int) {
 	u.Class = class
 }
@@ -57,6 +66,11 @@ func (u *ClientInfo) CanForward() bool {
 	return u.Class == Newbie || u.Class == Forwarder || u.Class == Candidate
 }
 
+// UpdateFetchFrom updates the FetchFrom field with the provided value.
+func (u *ClientInfo) UpdateFetchFrom(clientID string) {
+	u.FetchFrom = clientID
+}
+
 // DeepCopy creates a deep copy of the given ClientInfo.
 func (u *ClientInfo) DeepCopy() *ClientInfo {
 	return &ClientInfo{
@@ -64,6 +78,7 @@ func (u *ClientInfo) DeepCopy() *ClientInfo {
 		ChannelID:       u.ChannelID,
 		CreatedAt:       u.CreatedAt,
 		Class:           u.Class,
+		FetchFrom:       u.FetchFrom,
 		ConnectionCount: u.ConnectionCount,
 		LastUpdated:     u.LastUpdated,
 	}

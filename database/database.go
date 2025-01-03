@@ -51,6 +51,7 @@ type Database interface {
 	UpdateClientInfoClass(channelID string, clientID string, class int) error
 	IncreaseClientInfoConnCount(channelID string, clientID string) error
 	DecreaseClientInfoConnCount(channelID string, clientID string) error
+	UpdateClientInfoFetchFrom(channelID string, clientID string, fetchFrom string) error
 
 	CreatePushConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
 	CreatePullConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)

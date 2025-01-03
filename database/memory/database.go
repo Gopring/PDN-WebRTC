@@ -174,6 +174,26 @@ func (d *DB) DecreaseClientInfoConnCount(channelID string, clientID string) erro
 	return nil
 }
 
+// UpdateClientInfoFetchFrom updates the user fetchFrom.
+func (d *DB) UpdateClientInfoFetchFrom(channelID, clientID, fetchFrom string) error {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
+	if err != nil {
+		return fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return fmt.Errorf("user %s in channel %s: %w", clientID, channelID, database.ErrClientNotFound)
+	}
+	info := raw.(*database.ClientInfo).DeepCopy()
+	info.UpdateFetchFrom(fetchFrom)
+	if err := txn.Insert(tblClients, info); err != nil {
+		return fmt.Errorf("insert user: %w", err)
+	}
+	txn.Commit()
+	return nil
+}
+
 // DeleteClientInfoByID deletes a user by their ID.
 func (d *DB) DeleteClientInfoByID(channelID, clientID string) error {
 	txn := d.db.Txn(true)

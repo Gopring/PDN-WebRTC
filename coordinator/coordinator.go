@@ -115,6 +115,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 			}
 			if forward.IsConnected() {
 				c.metric.DecrementPeerConnections()
+				if err := c.database.UpdateClientInfoFetchFrom(forward.ChannelID, forward.To, database.NONE); err != nil {
+					log.Printf("error occurs in updating client info %v", err)
+				}
 			}
 		}
 	}
@@ -253,7 +256,9 @@ func (c *Coordinator) handleMediaConnected(event any) {
 	if connInfo.IsUpstream() {
 		return
 	}
-
+	if err := c.database.UpdateClientInfoFetchFrom(connInfo.ChannelID, connInfo.To, database.SERVER); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+	}
 	if err := c.balance(connInfo.ChannelID, connInfo.To); err != nil && !errors.Is(err, ErrNoForwarder) {
 		log.Printf("error occurs in balancing %v", err)
 		return
@@ -319,10 +324,15 @@ func (c *Coordinator) handlePeerConnected(event any) {
 		log.Printf("error occurs in deleting connection info %v", err)
 		return
 	}
+	if err := c.database.UpdateClientInfoFetchFrom(peerConn.ChannelID, peerConn.To, peerConn.From); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+		return
+	}
 	c.metric.IncrementPeerConnections()
 	if err := c.database.IncreaseClientInfoConnCount(peerConn.ChannelID, peerConn.From); err != nil {
 		log.Printf("error occurs in increasing client info count %v", err)
 	}
+
 	if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
 		ConnectionID: serverConn.ID,
 	}); err != nil {
