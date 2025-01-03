@@ -45,14 +45,18 @@ type Database interface {
 	FindChannelInfoByID(id string) (*ChannelInfo, error)
 
 	CreateClientInfo(channelID, clientID string) error
-	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
 	FindForwarderInfo(channelID string, fetcherID string, maxForwardNum int) (*ClientInfo, error)
-	UpdateClientInfo(channelID, clientID string, class int) (*ClientInfo, error)
 	DeleteClientInfoByID(channelID, clientID string) error
+	FindClientInfoByClass(channelID string, class int) ([]*ClientInfo, error)
+	UpdateClientInfoClass(channelID string, clientID string, class int) error
+	IncreaseClientInfoConnCount(channelID string, clientID string) error
+	DecreaseClientInfoConnCount(channelID string, clientID string) error
+	UpdateClientInfoFetchFrom(channelID string, clientID string, fetchFrom string) error
 
 	CreatePushConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
 	CreatePullConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
 	CreatePeerConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
+	CreateClassifyConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
 	FindUpstreamInfo(channelID string) (*ConnectionInfo, error)
 	FindDownstreamInfo(channelID, to string) (*ConnectionInfo, error)
 	FindConnectionInfoByFrom(channelID, from string) ([]*ConnectionInfo, error)

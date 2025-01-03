@@ -63,3 +63,10 @@ type Failed struct {
 type Clear struct {
 	ConnectionID string
 }
+
+// Classified represents the result of a classification.
+type Classified struct {
+	ConnectionID string
+	ChannelID    string
+	Success      bool
+}

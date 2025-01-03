@@ -33,7 +33,6 @@ func (c *Channel) SendAll(message any) {
 	for _, sub := range c.subs {
 		select {
 		case sub.Send() <- message:
-			return
 		case <-time.After(1 * time.Second):
 			log.Printf("Timeout occurs in sending message to Topic: %s, Detail: %s, Message:%v", c.topic, c.detail, message)
 		}
