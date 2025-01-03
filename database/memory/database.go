@@ -545,3 +545,30 @@ func calculateScore(forwarder *database.ClientInfo, weights map[string]float64) 
 
 	return score
 }
+
+// CreateClassifyConnectionInfo creates a new connection between two clients.
+func (d *DB) CreateClassifyConnectionInfo(channelID, from, to, connectionID string) (*database.ConnectionInfo, error) {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblConnections, idxConnID, connectionID)
+	if err != nil {
+		return nil, fmt.Errorf("find user by username: %w", err)
+	}
+	if raw != nil {
+		return nil, fmt.Errorf("%s: %w", from, database.ErrConnectionAlreadyExists)
+	}
+	newConn := &database.ConnectionInfo{
+		ID:        connectionID,
+		ChannelID: channelID,
+		From:      from,
+		To:        to,
+		Status:    database.Initialized,
+		Type:      database.Classify,
+		CreatedAt: time.Now(),
+	}
+	if err := txn.Insert(tblConnections, newConn); err != nil {
+		return nil, fmt.Errorf("insert connection: %w", err)
+	}
+	txn.Commit()
+	return newConn.DeepCopy(), nil
+}
