@@ -84,13 +84,6 @@ func (c *Coordinator) handleActivate(event any) {
 		log.Printf("error occurs in creating client info %v", err)
 		return
 	}
-
-	if err := c.broker.Publish(broker.Classification, broker.CLASSIFY, message.ClassifyRequest{
-		ChannelID: msg.ChannelID,
-	}); err != nil {
-		log.Printf("error occurs in publishing %v", err)
-		return
-	}
 }
 
 // handleDeactivate handles the deactivate event. deactivate event means that a client
@@ -157,6 +150,13 @@ func (c *Coordinator) handleDeactivate(event any) {
 					if err := c.database.DecreaseClientInfoConnCount(fetch.ChannelID, fetch.From); err != nil {
 						log.Printf("error occurs in decrementing client info conn count %v", err)
 					}
+				}
+			case database.Classify:
+				if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
+					Type:         response.CLEAR,
+					ConnectionID: fetch.ID,
+				}); err != nil {
+					log.Printf("error occurs in publishing close message %v", err)
 				}
 			default:
 				panic("unhandled default case")
@@ -287,16 +287,6 @@ func (c *Coordinator) handlePeerFailed(event any) {
 		return
 	}
 
-	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.Fetcher); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
-		return
-	}
-
-	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.Fetcher); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
-		return
-	}
-
 	if err := c.balance(connInfo.ChannelID, connInfo.To); err != nil && !errors.Is(err, ErrNoForwarder) {
 		log.Printf("error occurs in balancing %v", err)
 		return
@@ -304,12 +294,6 @@ func (c *Coordinator) handlePeerFailed(event any) {
 
 	if err := c.balance(connInfo.ChannelID, connInfo.From); err != nil && !errors.Is(err, ErrNoForwarder) {
 		log.Printf("error occurs in balancing %v", err)
-		return
-	}
-	if err := c.broker.Publish(broker.Classification, broker.CLASSIFY, message.ClassifyRequest{
-		ChannelID: connInfo.ChannelID,
-	}); err != nil {
-		log.Printf("error occurs in publishing pull message %v", err)
 		return
 	}
 }
@@ -321,31 +305,21 @@ func (c *Coordinator) handlePeerConnected(event any) {
 		log.Printf("error occurs in parsing failed message %v", event)
 		return
 	}
-
 	peerConn, err := c.database.UpdateConnectionInfo(msg.ConnectionID, database.Connected)
 	if err != nil {
 		log.Printf("error occurs in updating connection info %v", err)
 		return
 	}
-
 	serverConn, err := c.database.FindDownstreamInfo(peerConn.ChannelID, peerConn.To)
 	if err != nil {
 		log.Printf("error occurs in finding downstream info %v", err)
 		return
 	}
-
 	if err := c.database.DeleteConnectionInfoByID(serverConn.ID); err != nil {
 		log.Printf("error occurs in deleting connection info %v", err)
 		return
 	}
-
 	c.metric.IncrementPeerConnections()
-	if err := c.database.UpdateClientInfoClass(peerConn.ChannelID, peerConn.To, database.PotentialForwarder); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
-	}
-	if err := c.database.UpdateClientInfoClass(peerConn.ChannelID, peerConn.From, database.PotentialForwarder); err != nil { //nolint:lll
-		log.Printf("error occurs in updating client info %v", err)
-	}
 	if err := c.database.IncreaseClientInfoConnCount(peerConn.ChannelID, peerConn.From); err != nil {
 		log.Printf("error occurs in increasing client info count %v", err)
 	}
