@@ -60,7 +60,7 @@ func (c *Classifier) handleMediaConnected(event any) {
 		log.Printf("error occurs in finding connection info by connection id %v", err)
 		return
 	}
-	potentialForwarders, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.PotentialForwarder)
+	Candidates, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Candidate)
 	if err != nil {
 		log.Printf("Error fetching potential forwarders: %v", err)
 		return
@@ -78,13 +78,13 @@ func (c *Classifier) handleMediaConnected(event any) {
 	}
 
 	currentFetcherIndex := 0
-	for _, potential := range potentialForwarders {
+	for _, candidate := range Candidates {
 		for i := 0; i < len(fetchers); i++ {
 			fetcher := fetchers[currentFetcherIndex]
 			currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
 
-			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", potential.ID, fetcher.ID)
-			if err := c.classify(potential, fetcher); err != nil {
+			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", candidate.ID, fetcher.ID)
+			if err := c.classify(candidate, fetcher); err != nil {
 				return
 			}
 		}
@@ -115,7 +115,7 @@ func (c *Classifier) handlePeerFailed(event any) {
 		return
 	}
 
-	potentialForwarders, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.PotentialForwarder)
+	Candidates, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Candidate)
 	if err != nil {
 		log.Printf("Error fetching potential forwarders: %v", err)
 		return
@@ -133,13 +133,13 @@ func (c *Classifier) handlePeerFailed(event any) {
 	}
 
 	currentFetcherIndex := 0
-	for _, potential := range potentialForwarders {
+	for _, candidate := range Candidates {
 		for i := 0; i < len(fetchers); i++ {
 			fetcher := fetchers[currentFetcherIndex]
 			currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
 
-			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", potential.ID, fetcher.ID)
-			if err := c.classify(potential, fetcher); err != nil {
+			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", candidate.ID, fetcher.ID)
+			if err := c.classify(candidate, fetcher); err != nil {
 				return
 			}
 		}
@@ -154,15 +154,15 @@ func (c *Classifier) handlePeerConnected(event any) {
 		return
 	}
 	connInfo, _ := c.database.FindConnectionInfoByID(msg.ConnectionID)
-	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.PotentialForwarder); err != nil {
+	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.Candidate); err != nil {
 		log.Printf("error occurs in updating client info %v", err)
 	}
-	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.PotentialForwarder); err != nil { //nolint:lll
+	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.Candidate); err != nil { //nolint:lll
 		log.Printf("error occurs in updating client info %v", err)
 	}
 }
 
-// classify attempts to establish a connection between a potential forwarder and a fetcher.
+// classify attempts to establish a connection between a candidate and a fetcher.
 func (c *Classifier) classify(forwarder *database.ClientInfo, fetcher *database.ClientInfo) error {
 
 	classifyConn, err := c.database.CreateClassifyConnectionInfo(fetcher.ChannelID, forwarder.ID, fetcher.ID, shortuuid.New()) //nolint:lll
@@ -199,14 +199,14 @@ func (c *Classifier) handleClassifyResult(event any) {
 	}
 }
 
-// promoteToForwarder updates the client role to Forwarder in the database.
+// promoteToForwarder updates the client class to Forwarder in the database.
 func (c *Classifier) promoteToForwarder(peerID, channelID string) {
 	if err := c.database.UpdateClientInfoClass(channelID, peerID, database.Forwarder); err != nil {
 		log.Printf("Error promoting PeerID %s to Forwarder: %v", peerID, err)
 	}
 }
 
-// demoteToFetcher updates the client role to Fetcher in the database.
+// demoteToFetcher updates the client class to Fetcher in the database.
 func (c *Classifier) demoteToFetcher(peerID, channelID string) {
 	if err := c.database.UpdateClientInfoClass(channelID, peerID, database.Fetcher); err != nil {
 		log.Printf("Error demoting PeerID %s to Fetcher: %v", peerID, err)

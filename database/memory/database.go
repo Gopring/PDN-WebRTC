@@ -85,7 +85,7 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	info := &database.ClientInfo{
 		ChannelID:       channelID,
 		ID:              clientID,
-		Class:           database.Candidate,
+		Class:           database.Newbie,
 		ConnectionCount: 0,
 		CreatedAt:       time.Now(),
 		LastUpdated:     time.Now(),
@@ -514,9 +514,9 @@ func calculateScore(forwarder *database.ClientInfo, weights map[string]float64) 
 	score := 0.0
 	// Assign base scores based on role
 	roleScores := map[int]float64{
-		database.Forwarder:          5.0,
-		database.PotentialForwarder: 3.0,
-		database.Candidate:          0.0,
+		database.Forwarder: 5.0,
+		database.Candidate: 3.0,
+		database.Newbie:    0.0,
 	}
 	// Add role score if applicable
 	if baseScore, ok := roleScores[forwarder.Class]; ok {

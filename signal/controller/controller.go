@@ -217,7 +217,7 @@ func (c *Controller) handlePull(req request.Common, channelID, userID string) er
 }
 
 // handleSignal handles the exchange event. exchange event means that a client will exchange SDP or
-// candidate with another client.
+// newbie with another client.
 func (c *Controller) handleSignal(req request.Common, channelID, userID string) error {
 	var payload request.Signal
 	if err := json.Unmarshal(req.Payload, &payload); err != nil {

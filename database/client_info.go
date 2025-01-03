@@ -3,8 +3,8 @@ package database
 import "time"
 
 const (
-	// Candidate is the class of a newly connected user.
-	Candidate = iota
+	// Newbie is the class of a newly connected user.
+	Newbie = iota
 
 	// Publisher is the class of publisher. This means who publishes the stream.
 	Publisher
@@ -15,8 +15,8 @@ const (
 	// Fetcher is the class of fetcher. This means who fetches the stream.
 	Fetcher
 
-	// PotentialForwarder is the class of a user who might be eligible to become a forwarder.
-	PotentialForwarder
+	// Candidate is the class of a user who might be eligible to become a forwarder.
+	Candidate
 )
 
 // ClientInfo is a struct for client information.
@@ -54,7 +54,7 @@ func (u *ClientInfo) UpdateClass(class int) {
 
 // CanForward returns whether the client can forward the stream.
 func (u *ClientInfo) CanForward() bool {
-	return u.Class == Candidate || u.Class == Forwarder || u.Class == PotentialForwarder
+	return u.Class == Newbie || u.Class == Forwarder || u.Class == Candidate
 }
 
 // DeepCopy creates a deep copy of the given ClientInfo.
