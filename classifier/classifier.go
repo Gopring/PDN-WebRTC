@@ -218,7 +218,7 @@ func (c *Classifier) classify(forwarder *database.ClientInfo, fetcher *database.
 		return fmt.Errorf("error occurs in creating peer connection info %v", err)
 	}
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.Classifying{
-		Type:         response.CLASSIFIED,
+		Type:         response.CLASSIFYING,
 		ConnectionID: classifyConn.ID,
 	}); err != nil {
 		log.Printf("error occurs in publishing fetch message %v", err)
