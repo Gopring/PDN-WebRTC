@@ -100,7 +100,7 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	// 02. Find forwarding peer connections. Because the fetcher don't know the forwarder left or just temporal issue.
 	// So we need to notify the fetcher that the forwarder left. And pull again.
-	if forwards, err := c.database.FindConnectionInfoByFrom(msg.ChannelID, msg.ClientID); err != nil {
+	if forwards, err := c.database.FindAllConnectionInfoByFrom(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in finding connection info by from %v", err)
 	} else {
 		for _, forward := range forwards {
@@ -124,7 +124,7 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	// 03. Find fetching connections. Because the forwarder don't know the fetcher left or just temporal issue.
 	// So we need to notify the forwarder that the fetcher left. Then Forwarder can clear the forwarding connection.
-	if fetches, err := c.database.FindConnectionInfoByTo(msg.ChannelID, msg.ClientID); err != nil {
+	if fetches, err := c.database.FindAllConnectionInfoByTo(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in finding connection info by to %v", err)
 	} else {
 		for _, fetch := range fetches {

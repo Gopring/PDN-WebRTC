@@ -12,6 +12,7 @@ const (
 const (
 	idxChannelID       = "id"
 	idxClientID        = "id"
+	idxClientClass     = "class"
 	idxClientChannelID = "channel_id"
 	idxConnID          = "id"
 	idxConnTo          = "to"
@@ -42,6 +43,16 @@ var schema = &memdb.DBSchema{
 						Indexes: []memdb.Indexer{
 							&memdb.StringFieldIndex{Field: "ChannelID"},
 							&memdb.StringFieldIndex{Field: "ID"},
+						},
+					},
+				},
+				idxClientClass: {
+					Name:   idxClientClass,
+					Unique: false,
+					Indexer: &memdb.CompoundIndex{
+						Indexes: []memdb.Indexer{
+							&memdb.StringFieldIndex{Field: "ChannelID"},
+							&memdb.IntFieldIndex{Field: "Class"},
 						},
 					},
 				},

@@ -70,6 +70,30 @@ func (d *DB) FindChannelInfoByID(id string) (*database.ChannelInfo, error) {
 	return raw.(*database.ChannelInfo).DeepCopy(), nil
 }
 
+// FindAllChannelInfos retrieves all channel information from the database.
+func (d *DB) FindAllChannelInfos() ([]*database.ChannelInfo, error) {
+	txn := d.db.Txn(false) // Read-only transaction
+	defer txn.Abort()
+
+	it, err := txn.Get(tblChannels, idxChannelID)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving channels: %w", err)
+	}
+
+	var channelInfos []*database.ChannelInfo
+
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		channel, ok := obj.(*database.ChannelInfo)
+		if !ok {
+			return nil, fmt.Errorf("invalid data type in channels table")
+		}
+
+		channelInfos = append(channelInfos, channel.DeepCopy())
+	}
+
+	return channelInfos, nil
+}
+
 // CreateClientInfo creates a new user if it doesn't exist.
 func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	txn := d.db.Txn(true)
@@ -97,8 +121,8 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 	return nil
 }
 
-// findClientInfoByID finds a user by their ID.
-func (d *DB) findClientInfoByID(channelID, clientID string) (*database.ClientInfo, error) {
+// FindClientInfoByID finds a user by their ID.
+func (d *DB) FindClientInfoByID(channelID, clientID string) (*database.ClientInfo, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
 	raw, err := txn.First(tblClients, idxClientID, channelID, clientID)
@@ -212,29 +236,41 @@ func (d *DB) DeleteClientInfoByID(channelID, clientID string) error {
 	return nil
 }
 
-// FindClientInfoByClass finds a user by their Class.
-func (d *DB) FindClientInfoByClass(channelID string, class int) ([]*database.ClientInfo, error) {
-	txn := d.db.Txn(false)
+// FindAllClientInfoByClass finds users by their Class.
+func (d *DB) FindAllClientInfoByClass(channelID string, class int) ([]*database.ClientInfo, error) {
+	txn := d.db.Txn(false) // Read-only transaction
 	defer txn.Abort()
-	it, err := txn.Get(tblClients, idxClientChannelID, channelID)
+
+	it, err := txn.Get(tblClients, idxClientClass, channelID, class)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching forwarders by channel ID: %w", err)
+		return nil, fmt.Errorf("error fetching clients by channel ID %s and class %d: %w", channelID, class, err)
 	}
+
 	var results []*database.ClientInfo
 	for obj := it.Next(); obj != nil; obj = it.Next() {
-		raw := obj.(*database.ClientInfo)
-
-		if raw.Class == class {
-			clientInfo, err := d.findClientInfoByID(raw.ChannelID, raw.ID)
-			if err != nil {
-				return nil, fmt.Errorf("error fetching client info for forwarder ID %s: %w", raw.ID, err)
-			}
-
-			results = append(results, clientInfo)
+		client, ok := obj.(*database.ClientInfo)
+		if !ok {
+			return nil, fmt.Errorf("unexpected data type in client table for channel ID %s and class %d", channelID, class)
 		}
+
+		results = append(results, client)
 	}
 
 	return results, nil
+}
+
+// FindClientInfoByClass finds a user by their Class.
+func (d *DB) FindClientInfoByClass(channelID string, class int) (*database.ClientInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+	raw, err := txn.First(tblClients, idxClientClass, channelID, class)
+	if err != nil {
+		return nil, fmt.Errorf("find user by username: %w", err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("clinet not found: %w", database.ErrClientNotFound)
+	}
+	return raw.(*database.ClientInfo).DeepCopy(), nil
 }
 
 // CreatePushConnectionInfo creates a new connection between two users.
@@ -366,8 +402,8 @@ func (d *DB) FindDownstreamInfo(channelID, to string) (*database.ConnectionInfo,
 	return nil, database.ErrConnectionNotFound
 }
 
-// FindConnectionInfoByFrom finds a connection by its from field.
-func (d *DB) FindConnectionInfoByFrom(channelID, from string) ([]*database.ConnectionInfo, error) {
+// FindAllConnectionInfoByFrom finds a connection by its from field.
+func (d *DB) FindAllConnectionInfoByFrom(channelID, from string) ([]*database.ConnectionInfo, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
 	iter, err := txn.Get(tblConnections, idxConnFrom, channelID, from)
@@ -386,8 +422,8 @@ func (d *DB) FindConnectionInfoByFrom(channelID, from string) ([]*database.Conne
 	return connections, nil
 }
 
-// FindConnectionInfoByTo finds a connection by its to field.
-func (d *DB) FindConnectionInfoByTo(channelID, to string) ([]*database.ConnectionInfo, error) {
+// FindAllConnectionInfoByTo finds a connection by its to field.
+func (d *DB) FindAllConnectionInfoByTo(channelID, to string) ([]*database.ConnectionInfo, error) {
 	txn := d.db.Txn(false)
 	defer txn.Abort()
 	iter, err := txn.Get(tblConnections, idxConnTo, channelID, to)
@@ -470,7 +506,7 @@ func (d *DB) FindForwarderInfo(channelID string, fetcher string, maxForwardNum i
 	}
 	optimalForwarder, err := d.findOptimalForwarder(channelID, fetcher, maxForwardNum, weights)
 	if err == nil && optimalForwarder != nil {
-		clientInfo, err := d.findClientInfoByID(optimalForwarder.ChannelID, optimalForwarder.ID)
+		clientInfo, err := d.FindClientInfoByID(optimalForwarder.ChannelID, optimalForwarder.ID)
 		if err == nil {
 			return clientInfo, nil
 		}

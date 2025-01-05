@@ -43,11 +43,14 @@ var (
 type Database interface {
 	EnsureDefaultChannelInfo(channelID, channelKey string) error
 	FindChannelInfoByID(id string) (*ChannelInfo, error)
+	FindAllChannelInfos() ([]*ChannelInfo, error)
 
 	CreateClientInfo(channelID, clientID string) error
 	FindForwarderInfo(channelID string, fetcherID string, maxForwardNum int) (*ClientInfo, error)
 	DeleteClientInfoByID(channelID, clientID string) error
-	FindClientInfoByClass(channelID string, class int) ([]*ClientInfo, error)
+	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
+	FindClientInfoByClass(channelID string, class int) (*ClientInfo, error)
+	FindAllClientInfoByClass(channelID string, class int) ([]*ClientInfo, error)
 	UpdateClientInfoClass(channelID string, clientID string, class int) error
 	IncreaseClientInfoConnCount(channelID string, clientID string) error
 	DecreaseClientInfoConnCount(channelID string, clientID string) error
@@ -59,8 +62,8 @@ type Database interface {
 	CreateClassifyConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
 	FindUpstreamInfo(channelID string) (*ConnectionInfo, error)
 	FindDownstreamInfo(channelID, to string) (*ConnectionInfo, error)
-	FindConnectionInfoByFrom(channelID, from string) ([]*ConnectionInfo, error)
-	FindConnectionInfoByTo(channelID, from string) ([]*ConnectionInfo, error)
+	FindAllConnectionInfoByFrom(channelID, from string) ([]*ConnectionInfo, error)
+	FindAllConnectionInfoByTo(channelID, from string) ([]*ConnectionInfo, error)
 	FindConnectionInfoByID(ConnectionID string) (*ConnectionInfo, error)
 	UpdateConnectionInfo(connectionID string, status int) (*ConnectionInfo, error)
 	DeleteConnectionInfoByID(connectionID string) error

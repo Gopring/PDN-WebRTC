@@ -9,6 +9,7 @@ import (
 	"pdn/database"
 	"pdn/types/client/response"
 	"pdn/types/message"
+	"time"
 )
 
 // Classifier is responsible for managing the classification of
@@ -33,6 +34,7 @@ func (c *Classifier) Start() {
 	peerFailedEvent := c.broker.Subscribe(broker.Peer, broker.FAILED)
 	classifyResultEvent := c.broker.Subscribe(broker.Classification, broker.CLASSIFIED)
 	peerConnectedEvent := c.broker.Subscribe(broker.Peer, broker.CONNECTED)
+	go c.StartCronJob()
 
 	for {
 		select {
@@ -44,6 +46,59 @@ func (c *Classifier) Start() {
 			go c.handleClassifyResult(event)
 		case event := <-peerConnectedEvent.Receive():
 			go c.handlePeerConnected(event)
+		}
+	}
+}
+
+// StartCronJob starts a periodic task that classifies clients.
+// It uses a ticker to trigger the classification task every minute.
+func (c *Classifier) StartCronJob() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		log.Println("Running periodic classification task")
+		c.handleCronJob()
+	}
+}
+
+// handleCronJob performs periodic classification tasks.
+func (c *Classifier) handleCronJob() {
+	channels, err := c.database.FindAllChannelInfos()
+	if err != nil {
+		log.Println(err)
+	}
+	for _, channel := range channels {
+		log.Printf("Processing channel %s", channel.ID)
+
+		candidates, err := c.database.FindAllClientInfoByClass(channel.ID, database.Candidate)
+		if err != nil {
+			log.Printf("Error fetching candidates for channel %s: %v", channel.ID, err)
+			continue
+		}
+
+		fetchers, err := c.database.FindAllClientInfoByClass(channel.ID, database.Fetcher)
+		if err != nil {
+			log.Printf("Error fetching fetchers for channel %s: %v", channel.ID, err)
+			continue
+		}
+
+		if len(candidates) == 0 || len(fetchers) == 0 {
+			log.Printf("No candidates or fetchers available for channel %s. Skipping classification.", channel.ID)
+			continue
+		}
+
+		currentFetcherIndex := 0
+		for _, candidate := range candidates {
+			for i := 0; i < len(fetchers); i++ {
+				fetcher := fetchers[currentFetcherIndex]
+				currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
+
+				log.Printf("Classifying Candidate %s with Fetcher %s for channel %s", candidate.ID, fetcher.ID, channel.ID)
+				if err := c.classify(candidate, fetcher); err != nil {
+					log.Printf("Error during classification for Candidate %s with Fetcher %s: %v", candidate.ID, fetcher.ID, err)
+				}
+			}
 		}
 	}
 }
@@ -60,34 +115,19 @@ func (c *Classifier) handleMediaConnected(event any) {
 		log.Printf("error occurs in finding connection info by connection id %v", err)
 		return
 	}
-	Candidates, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Candidate)
-	if err != nil {
-		log.Printf("Error fetching potential forwarders: %v", err)
+	obj, err := c.database.FindClientInfoByID(connInfo.ChannelID, connInfo.To)
+	if err != nil || obj == nil {
+		log.Printf("Error finding client info for ID %s: %v", connInfo.To, err)
+		return
+	}
+	fetcher, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Fetcher)
+	if err != nil || fetcher == nil {
+		log.Printf("error occurs in finding client info by class %v", err)
 		return
 	}
 
-	fetchers, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Fetcher)
-	if err != nil {
-		log.Printf("Error fetching fetchers: %v", err)
+	if err := c.classify(obj, fetcher); err != nil {
 		return
-	}
-
-	if len(fetchers) == 0 {
-		log.Println("No fetchers available for classification.")
-		return
-	}
-
-	currentFetcherIndex := 0
-	for _, candidate := range Candidates {
-		for i := 0; i < len(fetchers); i++ {
-			fetcher := fetchers[currentFetcherIndex]
-			currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
-
-			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", candidate.ID, fetcher.ID)
-			if err := c.classify(candidate, fetcher); err != nil {
-				return
-			}
-		}
 	}
 }
 
@@ -95,53 +135,61 @@ func (c *Classifier) handleMediaConnected(event any) {
 func (c *Classifier) handlePeerFailed(event any) {
 	msg, ok := event.(message.Failed)
 	if !ok {
-		log.Printf("error occurs in parsing failed message %v", event)
+		log.Printf("Invalid failed message event: %v", event)
 		return
 	}
 
+	// Find connection info based on the connection ID
 	connInfo, err := c.database.FindConnectionInfoByID(msg.ConnectionID)
 	if err != nil {
-		log.Printf("error occurs in finding connection info by connection id %v", err)
+		log.Printf("Error finding connection info by connection ID %v: %v", msg.ConnectionID, err)
 		return
 	}
 
 	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.Fetcher); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
+		log.Printf("Error updating peer %s to Fetcher: %v", connInfo.From, err)
 		return
 	}
 
 	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.Fetcher); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
+		log.Printf("Error updating peer %s to Fetcher: %v", connInfo.To, err)
 		return
 	}
 
-	Candidates, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Candidate)
+	fetcherFirst, err := c.database.FindClientInfoByID(connInfo.ChannelID, connInfo.From)
 	if err != nil {
-		log.Printf("Error fetching potential forwarders: %v", err)
+		log.Printf("Error finding fetcherFirst %s in channel %s: %v", connInfo.From, connInfo.ChannelID, err)
 		return
 	}
 
-	fetchers, err := c.database.FindClientInfoByClass(connInfo.ChannelID, database.Fetcher)
+	fetcherSecond, err := c.database.FindClientInfoByID(connInfo.ChannelID, connInfo.To)
 	if err != nil {
-		log.Printf("Error fetching fetchers: %v", err)
+		log.Printf("Error finding fetcherSecond %s in channel %s: %v", connInfo.To, connInfo.ChannelID, err) //nolint:govet
 		return
 	}
 
-	if len(fetchers) == 0 {
-		log.Println("No fetchers available for classification.")
+	candidates, err := c.database.FindAllClientInfoByClass(connInfo.ChannelID, database.Candidate)
+	if err != nil {
+		log.Printf("Error fetching candidates for channel %s: %v", connInfo.ChannelID, err)
 		return
 	}
 
-	currentFetcherIndex := 0
-	for _, candidate := range Candidates {
-		for i := 0; i < len(fetchers); i++ {
-			fetcher := fetchers[currentFetcherIndex]
-			currentFetcherIndex = (currentFetcherIndex + 1) % len(fetchers)
+	if len(candidates) == 0 {
+		log.Printf("No candidates available for channel %s. Skipping classification.", connInfo.ChannelID)
+		return
+	}
 
-			log.Printf("Sending classification request: PotentialForwarder %s -> Fetcher %s", candidate.ID, fetcher.ID)
-			if err := c.classify(candidate, fetcher); err != nil {
-				return
-			}
+	candidateFirst := candidates[0]
+	log.Printf("Classifying Candidate %s with Peer %s in channel %s", candidateFirst.ID, fetcherFirst.ID, connInfo.ChannelID) //nolint:lll
+	if err := c.classify(candidateFirst, fetcherFirst); err != nil {                                                          //nolint:lll
+		log.Printf("Error classifying Candidate %s with Peer %s: %v", candidateFirst.ID, fetcherFirst.ID, err)
+	}
+
+	if len(candidates) > 1 {
+		candidateSecond := candidates[1]
+		log.Printf("Classifying Candidate %s with Peer %s in channel %s", candidateSecond.ID, fetcherSecond.ID, connInfo.ChannelID) //nolint:lll
+		if err := c.classify(candidateSecond, fetcherSecond); err != nil {                                                          //nolint:lll
+			log.Printf("Error classifying Candidate %s with Peer %s: %v", candidateSecond.ID, fetcherSecond.ID, err)
 		}
 	}
 }
