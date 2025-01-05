@@ -3,14 +3,14 @@ package response
 
 // Constants for response types
 const (
-	ACTIVATE   = "ACTIVATE"
-	FORWARDING = "FORWARDING"
-	FORWARD    = "FORWARD"
-	CLOSED     = "CLOSED"
-	CLEAR      = "CLEAR"
-	SIGNAL     = "SIGNAL"
-	CLASSIFY   = "CLASSIFY"
-	CLASSIFIED = "CLASSIFIED"
+	ACTIVATE    = "ACTIVATE"
+	FORWARDING  = "FORWARDING"
+	FORWARD     = "FORWARD"
+	CLOSED      = "CLOSED"
+	CLEAR       = "CLEAR"
+	SIGNAL      = "SIGNAL"
+	CLASSIFY    = "CLASSIFY"
+	CLASSIFYING = "CLASSIFYING"
 )
 
 // Activate is data type for activating user
