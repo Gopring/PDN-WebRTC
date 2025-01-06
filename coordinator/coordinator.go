@@ -104,6 +104,14 @@ func (c *Coordinator) handleDeactivate(event any) {
 		log.Printf("error occurs in finding connection info by from %v", err)
 	} else {
 		for _, forward := range forwards {
+			if forward.IsConnected() {
+				c.metric.DecrementPeerConnections()
+				if err := c.database.UpdateClientInfoFetchFrom(forward.ChannelID, forward.To, database.NONE); err != nil {
+					log.Printf("error occurs in updating client info %v", err)
+				}
+			}
+			log.Printf("update fetchfrom to NONE")
+			log.Printf("publish closed")
 			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
 				Type:         response.CLOSED,
 				ConnectionID: forward.ID,
@@ -112,12 +120,6 @@ func (c *Coordinator) handleDeactivate(event any) {
 			}
 			if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
 				log.Printf("error occurs in deleting connection info %v", err)
-			}
-			if forward.IsConnected() {
-				c.metric.DecrementPeerConnections()
-				if err := c.database.UpdateClientInfoFetchFrom(forward.ChannelID, forward.To, database.NONE); err != nil {
-					log.Printf("error occurs in updating client info %v", err)
-				}
 			}
 		}
 	}
@@ -261,6 +263,7 @@ func (c *Coordinator) handleMediaConnected(event any) {
 	}
 	if err := c.balance(connInfo.ChannelID, connInfo.To); err != nil && !errors.Is(err, ErrNoForwarder) {
 		log.Printf("error occurs in balancing %v", err)
+		log.Printf("remain fetchfrom server")
 		return
 	}
 }
@@ -360,6 +363,16 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 	}
 	log.Printf("balancing %s %s", channelID, fetcherID)
 
+	clientInfo, err := c.database.FindClientInfoByID(channelID, fetcherID)
+	if err != nil {
+		return fmt.Errorf("error finding client info: %v", err)
+	}
+	if clientInfo != nil && clientInfo.FetchFrom != database.SERVER {
+		if err := c.database.UpdateClientInfoFetchFrom(clientInfo.ChannelID, clientInfo.ID, database.NONE); err != nil {
+			return fmt.Errorf("error updating client fetchFrom to None: %v", err)
+		}
+	}
+
 	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxForwardingNumber)
 	if err != nil {
 		return fmt.Errorf("error occurs in finding user info to forward %v", err)
@@ -381,6 +394,24 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 	}); err != nil {
 		return fmt.Errorf("error occurs in publishing fetch message %v", err)
 	}
-	return nil
 
+	// rebalancing should be occured
+	fetchers, err := c.database.FindAllClientInfoByFetchFrom(peerConn.ChannelID, fetcherID)
+	if err != nil {
+		return fmt.Errorf("error occurs in finding client info: %v", err)
+	}
+
+	for _, fetcher := range fetchers {
+		log.Printf("Initialize fetchFrom: %s for channel: %s", fetcher.ID, fetcher.ChannelID)
+		if err := c.database.UpdateClientInfoFetchFrom(fetcher.ChannelID, fetcher.ID, database.NONE); err != nil {
+			log.Printf("error occurs in updating client info %v", err)
+		}
+	}
+	for _, fetcher := range fetchers {
+		log.Printf("Rebalancing fetcher: %s for channel: %s", fetcher.ID, fetcher.ChannelID)
+		if err := c.balance(fetcher.ChannelID, fetcher.ID); err != nil {
+			log.Printf("Error rebalancing fetcher %s: %v", fetcher.ID, err)
+		}
+	}
+	return nil
 }

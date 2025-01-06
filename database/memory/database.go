@@ -110,6 +110,7 @@ func (d *DB) CreateClientInfo(channelID, clientID string) error {
 		ChannelID:       channelID,
 		ID:              clientID,
 		Class:           database.Newbie,
+		FetchFrom:       database.NONE,
 		ConnectionCount: 0,
 		CreatedAt:       time.Now(),
 		LastUpdated:     time.Now(),
@@ -259,6 +260,31 @@ func (d *DB) FindAllClientInfoByClass(channelID string, class int) ([]*database.
 	return results, nil
 }
 
+// FindAllClientInfoByFetchFrom finds users by their FetchFrom.
+func (d *DB) FindAllClientInfoByFetchFrom(channelID string, fetchFrom string) ([]*database.ClientInfo, error) {
+	txn := d.db.Txn(false)
+	defer txn.Abort()
+
+	it, err := txn.Get(tblClients, idxClientChannelID, channelID)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching clients for channel ID %s: %v", channelID, err)
+	}
+
+	var results []*database.ClientInfo
+	for obj := it.Next(); obj != nil; obj = it.Next() {
+		client, ok := obj.(*database.ClientInfo)
+		if !ok {
+			return nil, fmt.Errorf("unexpected data type in client table for channel ID %s", channelID)
+		}
+
+		if client.FetchFrom == fetchFrom {
+			results = append(results, client)
+		}
+	}
+
+	return results, nil
+}
+
 // FindClientInfoByClass finds a user by their Class.
 func (d *DB) FindClientInfoByClass(channelID string, class int) (*database.ClientInfo, error) {
 	txn := d.db.Txn(false)
@@ -268,7 +294,7 @@ func (d *DB) FindClientInfoByClass(channelID string, class int) (*database.Clien
 		return nil, fmt.Errorf("find user by username: %w", err)
 	}
 	if raw == nil {
-		return nil, fmt.Errorf("clinet not found: %w", database.ErrClientNotFound)
+		return nil, fmt.Errorf("client not found: %w", database.ErrClientNotFound)
 	}
 	return raw.(*database.ClientInfo).DeepCopy(), nil
 }
@@ -542,7 +568,7 @@ func (d *DB) findOptimalForwarder(channelID, fetcher string, maxForwardNum int, 
 
 		log.Printf("Checking candidate: ID=%s, CanForward=%t, Class=%d, Fetcher=%s", candidate.ID, candidate.CanForward(), candidate.Class, fetcher) //nolint:lll
 
-		if !candidate.CanForward() || candidate.ID == fetcher || candidate.ConnectionCount > maxForwardNum {
+		if !candidate.CanForward() || candidate.ID == fetcher || candidate.ConnectionCount > maxForwardNum || candidate.FetchFrom == database.NONE || candidate.FetchFrom == fetcher { //nolint:lll
 			log.Printf("Candidate %s skipped: Cannot forward or is fetcher", candidate.ID)
 			continue
 		}
