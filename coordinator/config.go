@@ -4,10 +4,12 @@ package coordinator
 const (
 	DefaultMaxForwardingNumber = 1
 	DefaultSetPeerConnection   = false
+	DefaultMaxTreeHeight       = 1
 )
 
 // Config contains the configuration for the coordinator.
 type Config struct {
 	MaxForwardingNumber int
 	SetPeerConnection   bool
+	MaxTreeHeight       int
 }

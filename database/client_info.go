@@ -34,6 +34,7 @@ type ClientInfo struct {
 	Class           int
 	ConnectionCount int
 	FetchFrom       string
+	Height          int
 	CreatedAt       time.Time
 	LastUpdated     time.Time
 	//NetworkUsage   float64   // Network usage (e.g., Mbps)
@@ -71,6 +72,11 @@ func (u *ClientInfo) UpdateFetchFrom(clientID string) {
 	u.FetchFrom = clientID
 }
 
+// UpdateHeight updates the Height field with the provided value.
+func (u *ClientInfo) UpdateHeight(height int) {
+	u.Height = height
+}
+
 // DeepCopy creates a deep copy of the given ClientInfo.
 func (u *ClientInfo) DeepCopy() *ClientInfo {
 	return &ClientInfo{
@@ -79,6 +85,7 @@ func (u *ClientInfo) DeepCopy() *ClientInfo {
 		CreatedAt:       u.CreatedAt,
 		Class:           u.Class,
 		FetchFrom:       u.FetchFrom,
+		Height:          u.Height,
 		ConnectionCount: u.ConnectionCount,
 		LastUpdated:     u.LastUpdated,
 	}

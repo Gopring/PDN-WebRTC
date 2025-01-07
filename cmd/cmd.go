@@ -58,6 +58,7 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		coordinator.DefaultMaxForwardingNumber, "max forwarding number")
 	fs.BoolVar(&cor.SetPeerConnection, "setPeerConnection",
 		coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
+	fs.IntVar(&cor.MaxTreeHeight, "maxTreeHeight", coordinator.DefaultMaxTreeHeight, "max tree height")
 	fs.IntVar(&met.Port, "metricPort", metric.DefaultMetricsPort, "listening port")
 	fs.StringVar(&met.Path, "metricPath", metric.DefaultMetricsPath, "metrics path")
 	fs.DurationVar(&clf.TimeoutDuration, "timeout", classifier.DefaultTimeoutDuration,

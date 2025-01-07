@@ -109,6 +109,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 				if err := c.database.UpdateClientInfoFetchFrom(forward.ChannelID, forward.To, database.NONE); err != nil {
 					log.Printf("error occurs in updating client info %v", err)
 				}
+				if err := c.database.UpdateClientInfoHeight(forward.ChannelID, forward.To, 0); err != nil {
+					log.Printf("error occurs in updating client info %v", err)
+				}
 			}
 			log.Printf("update fetchfrom to NONE")
 			log.Printf("publish closed")
@@ -335,7 +338,13 @@ func (c *Coordinator) handlePeerConnected(event any) {
 	if err := c.database.IncreaseClientInfoConnCount(peerConn.ChannelID, peerConn.From); err != nil {
 		log.Printf("error occurs in increasing client info count %v", err)
 	}
-
+	forwarder, err := c.database.FindClientInfoByID(peerConn.ChannelID, peerConn.From)
+	if err != nil {
+		log.Printf("error occurs in finding client info %v", err)
+	}
+	if err := c.database.UpdateClientInfoHeight(peerConn.ChannelID, peerConn.To, forwarder.Height+1); err != nil {
+		log.Printf("error occurs in updating client info %v", err)
+	}
 	if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
 		ConnectionID: serverConn.ID,
 	}); err != nil {
@@ -371,9 +380,12 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 		if err := c.database.UpdateClientInfoFetchFrom(clientInfo.ChannelID, clientInfo.ID, database.NONE); err != nil {
 			return fmt.Errorf("error updating client fetchFrom to None: %v", err)
 		}
+		if err := c.database.UpdateClientInfoHeight(clientInfo.ChannelID, clientInfo.ID, 0); err != nil {
+			return fmt.Errorf("error updating client height: %v", err)
+		}
 	}
 
-	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxForwardingNumber)
+	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxTreeHeight, c.config.MaxForwardingNumber) //nolint:lll
 	if err != nil {
 		return fmt.Errorf("error occurs in finding user info to forward %v", err)
 	}
@@ -395,7 +407,7 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 		return fmt.Errorf("error occurs in publishing fetch message %v", err)
 	}
 
-	// rebalancing should be occured
+	// rebalancing should be occurred.
 	fetchers, err := c.database.FindAllClientInfoByFetchFrom(peerConn.ChannelID, fetcherID)
 	if err != nil {
 		return fmt.Errorf("error occurs in finding client info: %v", err)
@@ -406,6 +418,10 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 		if err := c.database.UpdateClientInfoFetchFrom(fetcher.ChannelID, fetcher.ID, database.NONE); err != nil {
 			log.Printf("error occurs in updating client info %v", err)
 		}
+		if err := c.database.UpdateClientInfoHeight(fetcher.ChannelID, fetcher.ID, 0); err != nil {
+			log.Printf("error occurs in updating client height %v", err)
+		}
+
 	}
 	for _, fetcher := range fetchers {
 		log.Printf("Rebalancing fetcher: %s for channel: %s", fetcher.ID, fetcher.ChannelID)
