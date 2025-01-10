@@ -21,6 +21,7 @@ const (
 	Client
 	Media
 	Peer
+	Classification
 )
 
 // Detail constants for message details.
@@ -35,6 +36,7 @@ const (
 	DISCONNECTED Detail = "DISCONNECTED"
 	FAILED       Detail = "FAILED"
 	CLEAR        Detail = "CLEAR"
+	CLASSIFIED   Detail = "CLASSIFIED"
 )
 
 // Broker is a message broker that manages message channels and subscriptions.
@@ -119,6 +121,8 @@ func (t Topic) String() string {
 		return "Client"
 	case Media:
 		return "Media"
+	case Classification:
+		return "Classification"
 	default:
 		return "Unknown"
 	}

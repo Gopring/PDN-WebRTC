@@ -12,10 +12,12 @@ const (
 const (
 	idxChannelID       = "id"
 	idxClientID        = "id"
+	idxClientClass     = "class"
 	idxClientChannelID = "channel_id"
 	idxConnID          = "id"
 	idxConnTo          = "to"
 	idxConnFrom        = "from"
+	idxConnChannelID   = "channel_id"
 )
 
 // schema is the schema of the memory database.
@@ -41,6 +43,16 @@ var schema = &memdb.DBSchema{
 						Indexes: []memdb.Indexer{
 							&memdb.StringFieldIndex{Field: "ChannelID"},
 							&memdb.StringFieldIndex{Field: "ID"},
+						},
+					},
+				},
+				idxClientClass: {
+					Name:   idxClientClass,
+					Unique: false,
+					Indexer: &memdb.CompoundIndex{
+						Indexes: []memdb.Indexer{
+							&memdb.StringFieldIndex{Field: "ChannelID"},
+							&memdb.IntFieldIndex{Field: "Class"},
 						},
 					},
 				},
@@ -78,6 +90,11 @@ var schema = &memdb.DBSchema{
 							&memdb.StringFieldIndex{Field: "From"},
 						},
 					},
+				},
+				idxConnChannelID: {
+					Name:    "channel_id",
+					Unique:  false,
+					Indexer: &memdb.StringFieldIndex{Field: "ChannelID"},
 				},
 			},
 		},

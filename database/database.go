@@ -43,20 +43,28 @@ var (
 type Database interface {
 	EnsureDefaultChannelInfo(channelID, channelKey string) error
 	FindChannelInfoByID(id string) (*ChannelInfo, error)
+	FindAllChannelInfos() ([]*ChannelInfo, error)
 
 	CreateClientInfo(channelID, clientID string) error
-	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
 	FindForwarderInfo(channelID string, fetcherID string, maxForwardNum int) (*ClientInfo, error)
-	UpdateClientInfo(channelID, clientID string, class int) (*ClientInfo, error)
 	DeleteClientInfoByID(channelID, clientID string) error
+	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
+	FindClientInfoByClass(channelID string, class int) (*ClientInfo, error)
+	FindAllClientInfoByFetchFrom(channelID string, fetchFrom string) ([]*ClientInfo, error)
+	FindAllClientInfoByClass(channelID string, class int) ([]*ClientInfo, error)
+	UpdateClientInfoClass(channelID string, clientID string, class int) error
+	IncreaseClientInfoConnCount(channelID string, clientID string) error
+	DecreaseClientInfoConnCount(channelID string, clientID string) error
+	UpdateClientInfoFetchFrom(channelID string, clientID string, fetchFrom string) error
 
 	CreatePushConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
 	CreatePullConnectionInfo(channelID, clientID, connectionID string) (*ConnectionInfo, error)
 	CreatePeerConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
+	CreateClassifyConnectionInfo(channelID, from, to, connectionID string) (*ConnectionInfo, error)
 	FindUpstreamInfo(channelID string) (*ConnectionInfo, error)
 	FindDownstreamInfo(channelID, to string) (*ConnectionInfo, error)
-	FindConnectionInfoByFrom(channelID, from string) ([]*ConnectionInfo, error)
-	FindConnectionInfoByTo(channelID, from string) ([]*ConnectionInfo, error)
+	FindAllConnectionInfoByFrom(channelID, from string) ([]*ConnectionInfo, error)
+	FindAllConnectionInfoByTo(channelID, from string) ([]*ConnectionInfo, error)
 	FindConnectionInfoByID(ConnectionID string) (*ConnectionInfo, error)
 	UpdateConnectionInfo(connectionID string, status int) (*ConnectionInfo, error)
 	DeleteConnectionInfoByID(connectionID string) error

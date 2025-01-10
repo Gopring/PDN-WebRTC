@@ -3,12 +3,14 @@ package response
 
 // Constants for response types
 const (
-	ACTIVATE = "ACTIVATE"
-	FETCH    = "FETCH"
-	FORWARD  = "FORWARD"
-	CLOSED   = "CLOSED"
-	CLEAR    = "CLEAR"
-	SIGNAL   = "SIGNAL"
+	ACTIVATE    = "ACTIVATE"
+	FORWARDING  = "FORWARDING"
+	FORWARD     = "FORWARD"
+	CLOSED      = "CLOSED"
+	CLEAR       = "CLEAR"
+	SIGNAL      = "SIGNAL"
+	CLASSIFY    = "CLASSIFY"
+	CLASSIFYING = "CLASSIFYING"
 )
 
 // Activate is data type for activating user
@@ -17,15 +19,15 @@ type Activate struct {
 	Message string `json:"message"`
 }
 
-// Forward is data type for server sent response to command user forwarding
-type Forward struct {
+// Forwarding is data type for server sent response to command user forwarding
+type Forwarding struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 	SDP          string `json:"sdp"`
 }
 
-// Fetch is data type for server sent response to command user fetching
-type Fetch struct {
+// Forward is data type for server sent response to command user fetching
+type Forward struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 }
@@ -48,4 +50,17 @@ type Signal struct {
 	ConnectionID string `json:"connection_id"`
 	SignalType   string `json:"signal_type"`
 	SignalData   string `json:"signal_data"`
+}
+
+// Classifying is data type for server sent response to command user forwarding while classifying
+type Classifying struct {
+	Type         string `json:"type"`
+	ConnectionID string `json:"connection_id"`
+	SDP          string `json:"sdp"`
+}
+
+// Classify is data type for server sent response to command user fetching while classifying
+type Classify struct {
+	Type         string `json:"type"`
+	ConnectionID string `json:"connection_id"`
 }
