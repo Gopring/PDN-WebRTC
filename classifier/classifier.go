@@ -53,7 +53,7 @@ func (c *Classifier) Start() {
 // StartCronJob starts a periodic task that classifies clients.
 // It uses a ticker to trigger the classification task every minute.
 func (c *Classifier) StartCronJob() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(c.config.CronJobFrequency)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -155,43 +155,6 @@ func (c *Classifier) handlePeerFailed(event any) {
 		log.Printf("Error updating peer %s to Fetcher: %v", connInfo.To, err)
 		return
 	}
-
-	fetcherFirst, err := c.database.FindClientInfoByID(connInfo.ChannelID, connInfo.From)
-	if err != nil {
-		log.Printf("Error finding fetcherFirst %s in channel %s: %v", connInfo.From, connInfo.ChannelID, err)
-		return
-	}
-
-	fetcherSecond, err := c.database.FindClientInfoByID(connInfo.ChannelID, connInfo.To)
-	if err != nil {
-		log.Printf("Error finding fetcherSecond %s in channel %s: %v", connInfo.To, connInfo.ChannelID, err) //nolint:govet
-		return
-	}
-
-	candidates, err := c.database.FindAllClientInfoByClass(connInfo.ChannelID, database.Candidate)
-	if err != nil {
-		log.Printf("Error fetching candidates for channel %s: %v", connInfo.ChannelID, err)
-		return
-	}
-
-	if len(candidates) == 0 {
-		log.Printf("No candidates available for channel %s. Skipping classification.", connInfo.ChannelID)
-		return
-	}
-
-	candidateFirst := candidates[0]
-	log.Printf("Classifying Candidate %s with Peer %s in channel %s", candidateFirst.ID, fetcherFirst.ID, connInfo.ChannelID) //nolint:lll
-	if err := c.classify(candidateFirst, fetcherFirst); err != nil {                                                          //nolint:lll
-		log.Printf("Error classifying Candidate %s with Peer %s: %v", candidateFirst.ID, fetcherFirst.ID, err)
-	}
-
-	if len(candidates) > 1 {
-		candidateSecond := candidates[1]
-		log.Printf("Classifying Candidate %s with Peer %s in channel %s", candidateSecond.ID, fetcherSecond.ID, connInfo.ChannelID) //nolint:lll
-		if err := c.classify(candidateSecond, fetcherSecond); err != nil {                                                          //nolint:lll
-			log.Printf("Error classifying Candidate %s with Peer %s: %v", candidateSecond.ID, fetcherSecond.ID, err)
-		}
-	}
 }
 
 // handlePeerConnected handles events when a peer-to-peer connection is successfully established.
@@ -202,11 +165,18 @@ func (c *Classifier) handlePeerConnected(event any) {
 		return
 	}
 	connInfo, _ := c.database.FindConnectionInfoByID(msg.ConnectionID)
-	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.Candidate); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
+	clientTo, err := c.database.FindClientInfoByID(connInfo.ChannelID, connInfo.To)
+	if err != nil {
+		log.Printf("error occurs in finding client info %v", err)
+		return
 	}
-	if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.Candidate); err != nil { //nolint:lll
-		log.Printf("error occurs in updating client info %v", err)
+	if clientTo.Class == database.Newbie {
+		if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.To, database.Candidate); err != nil {
+			log.Printf("error occurs in updating client info %v", err)
+		}
+		if err := c.database.UpdateClientInfoClass(connInfo.ChannelID, connInfo.From, database.Candidate); err != nil { //nolint:lll
+			log.Printf("error occurs in updating client info %v", err)
+		}
 	}
 }
 
@@ -217,8 +187,8 @@ func (c *Classifier) classify(forwarder *database.ClientInfo, fetcher *database.
 	if err != nil {
 		return fmt.Errorf("error occurs in creating peer connection info %v", err)
 	}
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.Classifying{
-		Type:         response.CLASSIFYING,
+	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetcher.ChannelID+fetcher.ID), response.Classify{
+		Type:         response.CLASSIFY,
 		ConnectionID: classifyConn.ID,
 	}); err != nil {
 		log.Printf("error occurs in publishing fetch message %v", err)
@@ -240,23 +210,13 @@ func (c *Classifier) handleClassifyResult(event any) {
 	}
 	if msg.Success {
 		log.Printf("PeerID %s classified successfully as Forwarder", connInfo.From)
-		c.promoteToForwarder(connInfo.From, msg.ChannelID)
+		if err := c.database.UpdateClientInfoClass(msg.ChannelID, connInfo.From, database.Forwarder); err != nil {
+			log.Printf("Error promoting PeerID %s to Forwarder: %v", connInfo.From, err)
+		}
 	} else {
 		log.Printf("PeerID %s classification failed, demoting to Fetcher", connInfo.From)
-		c.demoteToFetcher(connInfo.From, msg.ChannelID)
-	}
-}
-
-// promoteToForwarder updates the client class to Forwarder in the database.
-func (c *Classifier) promoteToForwarder(peerID, channelID string) {
-	if err := c.database.UpdateClientInfoClass(channelID, peerID, database.Forwarder); err != nil {
-		log.Printf("Error promoting PeerID %s to Forwarder: %v", peerID, err)
-	}
-}
-
-// demoteToFetcher updates the client class to Fetcher in the database.
-func (c *Classifier) demoteToFetcher(peerID, channelID string) {
-	if err := c.database.UpdateClientInfoClass(channelID, peerID, database.Fetcher); err != nil {
-		log.Printf("Error demoting PeerID %s to Fetcher: %v", peerID, err)
+		if err := c.database.UpdateClientInfoClass(msg.ChannelID, connInfo.From, database.Fetcher); err != nil {
+			log.Printf("Error demoting PeerID %s to Fetcher: %v", connInfo.From, err)
+		}
 	}
 }
