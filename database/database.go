@@ -51,7 +51,6 @@ type Database interface {
 	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)
 	FindClientInfoByClass(channelID string, class int) (*ClientInfo, error)
 	FindAllClientInfoByFetchFrom(channelID string, fetchFrom string) ([]*ClientInfo, error)
-	UpdateClientInfoHeight(channelID string, clientID string, height int) error
 	FindAllClientInfoByClass(channelID string, class int) ([]*ClientInfo, error)
 	UpdateClientInfoClass(channelID string, clientID string, class int) error
 	IncreaseClientInfoConnCount(channelID string, clientID string) error
