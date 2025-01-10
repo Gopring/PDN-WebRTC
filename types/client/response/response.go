@@ -52,15 +52,15 @@ type Signal struct {
 	SignalData   string `json:"signal_data"`
 }
 
-// Classify is data type for server sent response to command user forwarding while classifying
-type Classify struct {
+// Classifying is data type for server sent response to command user forwarding while classifying
+type Classifying struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 	SDP          string `json:"sdp"`
 }
 
-// Classifying is data type for server sent response to command user fetching while classifying
-type Classifying struct {
+// Classify is data type for server sent response to command user fetching while classifying
+type Classify struct {
 	Type         string `json:"type"`
 	ConnectionID string `json:"connection_id"`
 }

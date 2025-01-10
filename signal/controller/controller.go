@@ -354,8 +354,8 @@ func (c *Controller) handleClassifying(req request.Common, channelID, userID str
 	}
 	counterpart := connInfo.GetCounterpart(userID)
 
-	msg := response.Classify{
-		Type:         response.CLASSIFY,
+	msg := response.Classifying{
+		Type:         response.CLASSIFYING,
 		ConnectionID: payload.ConnectionID,
 		SDP:          payload.SDP,
 	}

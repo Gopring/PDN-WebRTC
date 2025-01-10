@@ -58,11 +58,12 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		coordinator.DefaultMaxForwardingNumber, "max forwarding number")
 	fs.BoolVar(&cor.SetPeerConnection, "setPeerConnection",
 		coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
-	fs.IntVar(&cor.MaxTreeHeight, "maxTreeHeight", coordinator.DefaultMaxTreeHeight, "max tree height")
 	fs.IntVar(&met.Port, "metricPort", metric.DefaultMetricsPort, "listening port")
 	fs.StringVar(&met.Path, "metricPath", metric.DefaultMetricsPath, "metrics path")
 	fs.DurationVar(&clf.TimeoutDuration, "timeout", classifier.DefaultTimeoutDuration,
 		"timeout duration for classification")
+	fs.DurationVar(&clf.CronJobFrequency, "cronJobFrequency", classifier.DefaultCronJobFrequency,
+		"cronJob frequency for classification")
 	err := fs.Parse(args)
 	if err != nil {
 		return pdn.Config{}, fmt.Errorf("failed to parse args: %w", err)
