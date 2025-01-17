@@ -9,6 +9,7 @@ import (
 	"pdn/broker"
 	"pdn/database"
 	"pdn/metric"
+	"pdn/pool"
 	"pdn/types/client/response"
 	"pdn/types/message"
 )
@@ -24,15 +25,17 @@ type Coordinator struct {
 	broker   *broker.Broker
 	metric   *metric.Metrics
 	database database.Database
+	pool     *pool.Pool
 }
 
 // New creates a new instance of Coordinator.
-func New(c Config, b *broker.Broker, m *metric.Metrics, db database.Database) *Coordinator {
+func New(c Config, b *broker.Broker, m *metric.Metrics, db database.Database, p *pool.Pool) *Coordinator {
 	return &Coordinator{
 		config:   c,
 		broker:   b,
 		metric:   m,
 		database: db,
+		pool:     p,
 	}
 }
 
@@ -100,17 +103,13 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	// 02. Find forwarding peer connections. Because the fetcher don't know the forwarder left or just temporal issue.
 	// So we need to notify the fetcher that the forwarder left. And pull again.
-	if forwards, err := c.database.FindAllConnectionInfoByFrom(msg.ChannelID, msg.ClientID); err != nil {
+	if forwards, err := c.database.FindAllPeerConnectionInfoByFrom(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in finding connection info by from %v", err)
 	} else {
 		for _, forward := range forwards {
 			if forward.IsConnected() {
 				c.metric.DecrementPeerConnections()
-				if err := c.database.UpdateClientInfoFetchFrom(forward.ChannelID, forward.To, database.NONE); err != nil {
-					log.Printf("error occurs in updating client info %v", err)
-				}
 			}
-			log.Printf("update fetchfrom to NONE")
 			log.Printf("publish closed")
 			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
 				Type:         response.CLOSED,
@@ -126,7 +125,7 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	// 03. Find fetching connections. Because the forwarder don't know the fetcher left or just temporal issue.
 	// So we need to notify the forwarder that the fetcher left. Then Forwarder can clear the forwarding connection.
-	if fetches, err := c.database.FindAllConnectionInfoByTo(msg.ChannelID, msg.ClientID); err != nil {
+	if fetches, err := c.database.FindAllPeerConnectionInfoByTo(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in finding connection info by to %v", err)
 	} else {
 		for _, fetch := range fetches {
@@ -152,16 +151,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 				}
 				if fetch.IsConnected() {
 					c.metric.DecrementPeerConnections()
-					if err := c.database.DecreaseClientInfoConnCount(fetch.ChannelID, fetch.From); err != nil {
-						log.Printf("error occurs in decrementing client info conn count %v", err)
+					if err := c.pool.UpdateClientScore(fetch.From, fetch.ChannelID, c.config.MaxForwardingNumber); err != nil {
+						log.Printf("error occurs in updating client score %v", err)
 					}
-				}
-			case database.Classify:
-				if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
-					Type:         response.CLEAR,
-					ConnectionID: fetch.ID,
-				}); err != nil {
-					log.Printf("error occurs in publishing close message %v", err)
 				}
 			default:
 				panic("unhandled default case")
@@ -190,11 +182,6 @@ func (c *Coordinator) handlePush(event any) {
 	connInfo, err := c.database.CreatePushConnectionInfo(msg.ChannelID, msg.ClientID, msg.ConnectionID)
 	if err != nil {
 		log.Printf("error occurs in creating connection info %v", err)
-		return
-	}
-
-	if err := c.database.UpdateClientInfoClass(msg.ChannelID, msg.ClientID, database.Publisher); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
 		return
 	}
 
@@ -257,9 +244,6 @@ func (c *Coordinator) handleMediaConnected(event any) {
 
 	if connInfo.IsUpstream() {
 		return
-	}
-	if err := c.database.UpdateClientInfoFetchFrom(connInfo.ChannelID, connInfo.To, database.SERVER); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
 	}
 	if err := c.balance(connInfo.ChannelID, connInfo.To); err != nil && !errors.Is(err, ErrNoForwarder) {
 		log.Printf("error occurs in balancing %v", err)
@@ -327,14 +311,8 @@ func (c *Coordinator) handlePeerConnected(event any) {
 		log.Printf("error occurs in deleting connection info %v", err)
 		return
 	}
-	if err := c.database.UpdateClientInfoFetchFrom(peerConn.ChannelID, peerConn.To, peerConn.From); err != nil {
-		log.Printf("error occurs in updating client info %v", err)
-		return
-	}
 	c.metric.IncrementPeerConnections()
-	if err := c.database.IncreaseClientInfoConnCount(peerConn.ChannelID, peerConn.From); err != nil {
-		log.Printf("error occurs in increasing client info count %v", err)
-	}
+
 	if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
 		ConnectionID: serverConn.ID,
 	}); err != nil {
@@ -362,23 +340,22 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 	}
 	log.Printf("balancing %s %s", channelID, fetcherID)
 
-	clientInfo, err := c.database.FindClientInfoByID(channelID, fetcherID)
+	fetcher, err := c.database.FindClientInfoByID(channelID, fetcherID)
 	if err != nil {
 		return fmt.Errorf("error finding client info: %v", err)
 	}
-	if clientInfo != nil && clientInfo.FetchFrom != database.SERVER {
-		if err := c.database.UpdateClientInfoFetchFrom(clientInfo.ChannelID, clientInfo.ID, database.NONE); err != nil {
-			return fmt.Errorf("error updating client fetchFrom to None: %v", err)
-		}
-	}
 
-	forwarderInfo, err := c.database.FindForwarderInfo(channelID, fetcherID, c.config.MaxForwardingNumber) //nolint:lll
-	if err != nil {
-		return fmt.Errorf("error occurs in finding user info to forward %v", err)
-	}
+	forwarderInfo := c.pool.GetTopForwarder(channelID)
 	if forwarderInfo == nil {
-		return ErrNoForwarder
+		log.Printf("no forwarder found%v", forwarderInfo)
+
+		if err := c.pool.AddClient(*fetcher); err != nil {
+			return fmt.Errorf("error occurs in adding client info to forward %v", err)
+		}
+		log.Printf("added forward info to pool")
+		return nil
 	}
+	log.Printf("found forwarder %v", forwarderInfo)
 
 	peerConn, err := c.database.CreatePeerConnectionInfo(channelID, forwarderInfo.ID, fetcherID, shortuuid.New())
 	if err != nil {
@@ -386,7 +363,9 @@ func (c *Coordinator) balance(channelID, fetcherID string) error {
 	}
 
 	c.metric.IncrementBalancingOccurs()
-
+	if err := c.pool.UpdateClientScore(forwarderInfo.ID, channelID, c.config.MaxForwardingNumber); err != nil {
+		return fmt.Errorf("error occurs in updating client score %v", err)
+	}
 	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+fetcherID), response.Forward{
 		Type:         response.FORWARD,
 		ConnectionID: peerConn.ID,

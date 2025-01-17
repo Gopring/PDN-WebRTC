@@ -4,12 +4,12 @@ package pdn
 import (
 	"fmt"
 	"pdn/broker"
-	"pdn/classifier"
 	"pdn/coordinator"
 	"pdn/database"
 	"pdn/database/memory"
 	"pdn/media"
 	"pdn/metric"
+	"pdn/pool"
 	"pdn/signal"
 )
 
@@ -21,7 +21,7 @@ type PDN struct {
 	coordinator *coordinator.Coordinator
 	signal      *signal.Signal
 	metric      *metric.Metrics
-	classifier  *classifier.Classifier
+	pool        *pool.Pool
 }
 
 // New creates a new instance of PDN.
@@ -30,15 +30,15 @@ func New(config Config) *PDN {
 	brk := broker.New()
 	db := memory.New(config.Database)
 	med := media.New(brk, met)
-	clf := classifier.New(config.Classifier, brk, db)
-	cod := coordinator.New(config.Coordinator, brk, met, db)
+	pl := pool.New(db)
+	cod := coordinator.New(config.Coordinator, brk, met, db, pl)
 	sig := signal.New(config.Signal, db, brk, met)
 
 	return &PDN{
 		broker:      brk,
 		database:    db,
 		media:       med,
-		classifier:  clf,
+		pool:        pl,
 		coordinator: cod,
 		signal:      sig,
 		metric:      met,
@@ -49,7 +49,6 @@ func New(config Config) *PDN {
 func (p *PDN) Start() error {
 	go p.metric.Start()
 	go p.media.Start()
-	go p.classifier.Start()
 	go p.coordinator.Start()
 	if err := p.signal.Start(); err != nil {
 		return fmt.Errorf("failed to start signal server: %w", err)
