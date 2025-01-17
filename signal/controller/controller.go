@@ -168,10 +168,6 @@ func (c *Controller) handleRequest(req request.Common, channelID, userID string)
 		err = c.handleDisconnected(req, channelID, userID)
 	case request.FAILED:
 		err = c.handleFailed(req, channelID, userID)
-	case request.CLASSIFIED:
-		err = c.handleClassified(req, channelID)
-	case request.CLASSIFYING:
-		err = c.handleClassifying(req, channelID, userID)
 	default:
 		err = fmt.Errorf("invalid request type: %s", req.Type)
 	}
@@ -335,51 +331,6 @@ func (c *Controller) handleDisconnected(req request.Common, channelID, userID st
 		ConnectionID: payload.ConnectionID,
 	}); err != nil {
 		return fmt.Errorf("failed to publish closed message: %w", err)
-	}
-	return nil
-}
-
-// handleClassifying handles the forward event while classifying
-func (c *Controller) handleClassifying(req request.Common, channelID, userID string) error {
-	var payload request.Classifying
-	if err := json.Unmarshal(req.Payload, &payload); err != nil {
-		return fmt.Errorf("failed to unmarshal signal payload: %w", err)
-	}
-	connInfo, err := c.database.FindConnectionInfoByID(payload.ConnectionID)
-	if err != nil {
-		return fmt.Errorf("failed to find connection info: %w", err)
-	}
-	if !connInfo.Authorize(channelID, userID) {
-		return fmt.Errorf("unauthorized connection exchange: %s", payload.ConnectionID)
-	}
-	counterpart := connInfo.GetCounterpart(userID)
-
-	msg := response.Classifying{
-		Type:         response.CLASSIFYING,
-		ConnectionID: payload.ConnectionID,
-		SDP:          payload.SDP,
-	}
-	if err := c.broker.Publish(broker.ClientSocket, broker.Detail(channelID+counterpart), msg); err != nil {
-		return fmt.Errorf("failed to publish exchange message: %w", err)
-	}
-	return nil
-}
-
-// handleClassified handles the classify result
-func (c *Controller) handleClassified(req request.Common, channelID string) error {
-	var payload request.Classified
-	if err := json.Unmarshal(req.Payload, &payload); err != nil {
-		log.Printf("Error unmarshalling classify result: %v", err)
-	}
-
-	result := message.Classified{
-		ConnectionID: payload.ConnectionID,
-		Success:      payload.Success,
-		ChannelID:    channelID,
-	}
-
-	if err := c.broker.Publish(broker.Classification, broker.CLASSIFIED, result); err != nil {
-		log.Printf("Error publishing classify result: %v", err)
 	}
 	return nil
 }

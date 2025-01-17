@@ -13,8 +13,6 @@ const (
 	FORWARDED    = "FORWARDED"
 	DISCONNECTED = "DISCONNECTED"
 	FAILED       = "FAILED"
-	CLASSIFYING  = "CLASSIFYING"
-	CLASSIFIED   = "CLASSIFIED"
 )
 
 // Common is data type that must be implemented in all request
@@ -68,17 +66,4 @@ type Failed struct {
 // Disconnected is data type for disconnecting user
 type Disconnected struct {
 	ConnectionID string `json:"connection_id"`
-}
-
-// Classifying is data type for forwarding while classifying
-type Classifying struct {
-	ConnectionID string `json:"connection_id"`
-	SDP          string `json:"sdp"`
-}
-
-// Classified is data type for classifying result
-type Classified struct {
-	ConnectionID string `json:"connection_id"`
-	Success      bool   `json:"success"`
-	ChannelID    string `json:"channel_id"`
 }

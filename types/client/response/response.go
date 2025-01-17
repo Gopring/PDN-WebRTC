@@ -3,14 +3,12 @@ package response
 
 // Constants for response types
 const (
-	ACTIVATE    = "ACTIVATE"
-	FORWARDING  = "FORWARDING"
-	FORWARD     = "FORWARD"
-	CLOSED      = "CLOSED"
-	CLEAR       = "CLEAR"
-	SIGNAL      = "SIGNAL"
-	CLASSIFY    = "CLASSIFY"
-	CLASSIFYING = "CLASSIFYING"
+	ACTIVATE   = "ACTIVATE"
+	FORWARDING = "FORWARDING"
+	FORWARD    = "FORWARD"
+	CLOSED     = "CLOSED"
+	CLEAR      = "CLEAR"
+	SIGNAL     = "SIGNAL"
 )
 
 // Activate is data type for activating user
@@ -50,17 +48,4 @@ type Signal struct {
 	ConnectionID string `json:"connection_id"`
 	SignalType   string `json:"signal_type"`
 	SignalData   string `json:"signal_data"`
-}
-
-// Classifying is data type for server sent response to command user forwarding while classifying
-type Classifying struct {
-	Type         string `json:"type"`
-	ConnectionID string `json:"connection_id"`
-	SDP          string `json:"sdp"`
-}
-
-// Classify is data type for server sent response to command user fetching while classifying
-type Classify struct {
-	Type         string `json:"type"`
-	ConnectionID string `json:"connection_id"`
 }
