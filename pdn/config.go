@@ -2,7 +2,6 @@
 package pdn
 
 import (
-	"pdn/classifier"
 	"pdn/coordinator"
 	"pdn/database"
 	"pdn/metric"
@@ -15,5 +14,4 @@ type Config struct {
 	Database    database.Config
 	Coordinator coordinator.Config
 	Metrics     metric.Config
-	Classifier  classifier.Config
 }

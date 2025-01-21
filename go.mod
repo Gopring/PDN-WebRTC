@@ -3,14 +3,15 @@ module pdn
 go 1.23.0
 
 require (
-	github.com/golang/mock v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/hashicorp/go-memdb v1.3.4
+	github.com/lithammer/shortuuid/v4 v4.2.0
 	github.com/pion/interceptor v0.1.37
-	github.com/pion/rtp v1.8.9
 	github.com/pion/webrtc/v4 v4.0.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/stretchr/testify v1.9.0
+	github.com/wangjia184/sortedset v0.0.0-20220209072355-af6d6d227aa7
 )
 
 require (
@@ -20,10 +21,8 @@ require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
-	github.com/hashicorp/go-memdb v1.3.4 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/lithammer/shortuuid/v4 v4.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pion/datachannel v1.5.9 // indirect
 	github.com/pion/dtls/v3 v3.0.3 // indirect
@@ -32,6 +31,7 @@ require (
 	github.com/pion/mdns/v2 v2.0.7 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.14 // indirect
+	github.com/pion/rtp v1.8.9 // indirect
 	github.com/pion/sctp v1.8.33 // indirect
 	github.com/pion/sdp/v3 v3.0.9 // indirect
 	github.com/pion/srtp/v3 v3.0.4 // indirect
