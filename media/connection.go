@@ -6,6 +6,7 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
 	"github.com/pion/webrtc/v4"
+	"log"
 )
 
 // NewInboundConnection creates a new inbound connection.
@@ -18,6 +19,8 @@ func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.Pee
 
 	// note: see https://stackoverflow.com/questions/68959096/pion-custom-sfu-server-not-working-inside-docker
 	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
+	log.Printf("%s", med.config.IP)
+
 	err := s.SetEphemeralUDPPortRange(49152, 49172)
 	if err != nil {
 		return nil, err
