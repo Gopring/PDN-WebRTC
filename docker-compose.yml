@@ -1,4 +1,18 @@
+version: "3.8"
+
 services:
+  pdn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pdn-server
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+      - "49152-49172:49152-49172/udp"
+    command: --setDefaultChannel --setPeerConnection --maxForwardingNumber=3
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus
     container_name: prometheus
@@ -8,7 +22,7 @@ services:
       - "9091:9090"
     restart: unless-stopped
     volumes:
-      - ./prometheus:/etc/prometheus
+      - ./metric/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prom_data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -23,6 +37,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=grafana
     volumes:
-      - ./grafana:/etc/grafana/provisioning/datasources
+      - ./metric/grafana:/etc/grafana/provisioning/datasources
+
 volumes:
   prom_data:
