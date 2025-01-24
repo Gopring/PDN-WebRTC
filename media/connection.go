@@ -21,9 +21,9 @@ func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.Pee
 	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
 	log.Printf("public IP : %s", med.config.IP)
 
-	err := s.SetEphemeralUDPPortRange(49152, 49172)
+	err := med.config.SetPortRange(&s)
 	if err != nil {
-		return nil, err
+		log.Fatalf("Error setting port range: %v", err)
 	}
 	// This is the user configurable RTP/RTCP Pipeline.
 	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
@@ -63,9 +63,9 @@ func (med *Media) NewOutboundConnection(config webrtc.Configuration) (*webrtc.Pe
 	s := webrtc.SettingEngine{}
 	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
 	log.Printf("public IP : %s", med.config.IP)
-	err := s.SetEphemeralUDPPortRange(49152, 49172)
+	err := med.config.SetPortRange(&s)
 	if err != nil {
-		return nil, fmt.Errorf("failed to set ephemeral UDP port range: %w", err)
+		log.Fatalf("Error setting port range: %v", err)
 	}
 
 	peerConnection, err := webrtc.NewAPI(webrtc.WithSettingEngine(s)).NewPeerConnection(config)

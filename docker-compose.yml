@@ -6,12 +6,14 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      - PUBLIC_IP=${PUBLIC_IP}
+      - IP=${IP}
+      - MinUdpPort=${MinUdpPort}
+      - MaxUdpPort=${MaxUdpPort}
     container_name: pdn-server
     ports:
       - "8080:8080"
       - "9090:9090"
-      - "49152-49172:49152-49172/udp"
+      - "${MinUdpPort}-${MaxUdpPort}:${MinUdpPort}-${MaxUdpPort}/udp"
     command: --setDefaultChannel --setPeerConnection --maxForwardingNumber=3
     restart: unless-stopped
 
