@@ -7,8 +7,8 @@ services:
       dockerfile: Dockerfile
     environment:
       - IP=${IP}
-      - MinUdpPort=${MinUdpPort}
-      - MaxUdpPort=${MaxUdpPort}
+      - MinUdpPort=${MinUdpPort:-49152}
+      - MaxUdpPort=${MaxUdpPort:-49172}
     container_name: pdn-server
     ports:
       - "8080:8080"
