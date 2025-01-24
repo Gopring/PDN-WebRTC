@@ -9,12 +9,19 @@ import (
 )
 
 // NewInboundConnection creates a new inbound connection.
-func NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
+func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
 		return nil, fmt.Errorf("failed to register default codecs: %w", err)
 	}
+	s := webrtc.SettingEngine{}
 
+	// note: see https://stackoverflow.com/questions/68959096/pion-custom-sfu-server-not-working-inside-docker
+	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
+	err := s.SetEphemeralUDPPortRange(49152, 49172)
+	if err != nil {
+		return nil, err
+	}
 	// This is the user configurable RTP/RTCP Pipeline.
 	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
 	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
@@ -36,8 +43,11 @@ func NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, 
 	i.Add(intervalPliFactory)
 
 	// Create a new RTCPeerConnection
-	peerConnection, err := webrtc.NewAPI(webrtc.WithMediaEngine(m),
-		webrtc.WithInterceptorRegistry(i)).NewPeerConnection(config)
+	peerConnection, err := webrtc.NewAPI(
+		webrtc.WithMediaEngine(m),
+		webrtc.WithInterceptorRegistry(i),
+		webrtc.WithSettingEngine(s),
+	).NewPeerConnection(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
 	}

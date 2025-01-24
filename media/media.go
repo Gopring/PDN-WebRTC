@@ -24,6 +24,7 @@ type Media struct {
 	streams          map[string]*stream.Stream
 	connections      map[string]*webrtc.PeerConnection
 	connectionConfig webrtc.Configuration
+	config           Config
 }
 
 // Default WebRTC configuration.
@@ -37,8 +38,9 @@ var defaultWebrtcConfig = webrtc.Configuration{
 
 // New creates a new Media instance.
 // TODO: Add more configuration options.
-func New(b *broker.Broker, m *metric.Metrics) *Media {
+func New(c Config, b *broker.Broker, m *metric.Metrics) *Media {
 	return &Media{
+		config:           c,
 		broker:           b,
 		metric:           m,
 		streams:          make(map[string]*stream.Stream),
@@ -99,6 +101,7 @@ func (m *Media) handleDownstream(event any) {
 		log.Printf("failed to cast event to Downstream: %v", event)
 		return
 	}
+	log.Printf("AddDownstream called with connectionID: %s, streamID: %s, SDP: %s", down.ConnectionID, down.StreamID, down.SDP)
 	serverSDP, err := m.AddDownstream(down.ConnectionID, down.StreamID, down.SDP)
 	if err != nil {
 		log.Printf("failed to add downstream: %v", err)
@@ -184,7 +187,7 @@ func (m *Media) createPushConn(connectionID string) (*webrtc.PeerConnection, err
 	if _, ok := m.connections[connectionID]; ok {
 		return nil, fmt.Errorf("connection already exists: %s", connectionID)
 	}
-	conn, err := NewInboundConnection(m.connectionConfig)
+	conn, err := m.NewInboundConnection(m.connectionConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create inbound connection: %w", err)
 	}
