@@ -19,7 +19,7 @@ func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.Pee
 
 	// note: see https://stackoverflow.com/questions/68959096/pion-custom-sfu-server-not-working-inside-docker
 	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
-	log.Printf("%s", med.config.IP)
+	log.Printf("public IP : %s", med.config.IP)
 
 	err := s.SetEphemeralUDPPortRange(49152, 49172)
 	if err != nil {
@@ -62,7 +62,7 @@ func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.Pee
 func (med *Media) NewOutboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	s := webrtc.SettingEngine{}
 	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
-	log.Printf("%s", med.config.IP)
+	log.Printf("public IP : %s", med.config.IP)
 	err := s.SetEphemeralUDPPortRange(49152, 49172)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set ephemeral UDP port range: %w", err)
