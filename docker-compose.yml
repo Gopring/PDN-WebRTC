@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      - PUBLIC_IP=${PUBLIC_IP}
     container_name: pdn-server
     ports:
       - "8080:8080"
