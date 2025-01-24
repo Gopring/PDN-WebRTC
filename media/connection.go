@@ -59,12 +59,19 @@ func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.Pee
 }
 
 // NewOutboundConnection creates a new outbound connection.
-func NewOutboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
-	peerConnection, err := webrtc.NewPeerConnection(config)
+func (med *Media) NewOutboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
+	s := webrtc.SettingEngine{}
+	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
+	log.Printf("%s", med.config.IP)
+	err := s.SetEphemeralUDPPortRange(49152, 49172)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set ephemeral UDP port range: %w", err)
+	}
+
+	peerConnection, err := webrtc.NewAPI(webrtc.WithSettingEngine(s)).NewPeerConnection(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
 	}
-
 	return peerConnection, nil
 }
 

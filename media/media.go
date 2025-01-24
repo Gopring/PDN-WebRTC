@@ -201,7 +201,7 @@ func (m *Media) createPullConn(connectionID string) (*webrtc.PeerConnection, err
 	if _, ok := m.connections[connectionID]; ok {
 		return nil, fmt.Errorf("connection already exists: %s", connectionID)
 	}
-	conn, err := NewOutboundConnection(m.connectionConfig)
+	conn, err := m.NewOutboundConnection(m.connectionConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create inbound connection: %w", err)
 	}
