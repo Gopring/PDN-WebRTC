@@ -52,6 +52,7 @@ func (m *Media) Start() {
 	upEvent := m.broker.Subscribe(broker.Media, broker.UPSTREAM)
 	downEvent := m.broker.Subscribe(broker.Media, broker.DOWNSTREAM)
 	clearEvent := m.broker.Subscribe(broker.Media, broker.CLEAR)
+	closeEvent := m.broker.Subscribe(broker.Media, broker.CLOSE)
 
 	for {
 		var err error
@@ -62,6 +63,8 @@ func (m *Media) Start() {
 			go m.handleDownstream(event)
 		case event := <-clearEvent.Receive():
 			go m.handleClear(event)
+		case event := <-closeEvent.Receive():
+			go m.handleCloseChannel(event)
 		}
 		if err != nil {
 			log.Printf("Failed to handle event in Media: %v", err)
@@ -156,6 +159,30 @@ func (m *Media) AddUpstream(connectionID, sdp string) (string, error) {
 	m.registerStream(connectionID, s)
 
 	return conn.LocalDescription().SDP, nil
+}
+
+func (m *Media) handleCloseChannel(event any) {
+	clr, ok := event.(message.Close)
+	if !ok {
+		log.Printf("failed to cast event to Close: %v", event)
+		return
+	}
+	connectionID := clr.ConnectionID
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conn, ok := m.connections[connectionID]
+	if !ok {
+		log.Printf("connection not found: %s", connectionID)
+		return
+	}
+	log.Printf("Media: closing connection: %s", connectionID)
+	if err := conn.Close(); err != nil {
+		log.Printf("failed to clr connection: %v", err)
+	}
+	delete(m.connections, connectionID)
+	delete(m.streams, connectionID)
+	log.Printf("remove connection: %s and stream: %s in Media", connectionID, connectionID)
 }
 
 // AddDownstream creates a new downstream connection and adds it to the channel.

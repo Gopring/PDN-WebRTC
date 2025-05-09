@@ -63,3 +63,8 @@ type Failed struct {
 type Clear struct {
 	ConnectionID string
 }
+
+// Close is data type for clearing connection
+type Close struct {
+	ConnectionID string
+}

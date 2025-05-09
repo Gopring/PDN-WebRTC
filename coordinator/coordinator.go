@@ -103,70 +103,91 @@ func (c *Coordinator) handleDeactivate(event any) {
 
 	// 02. Find forwarding peer connections. Because the fetcher don't know the forwarder left or just temporal issue.
 	// So we need to notify the fetcher that the forwarder left. And pull again.
-	if forwards, err := c.database.FindAllPeerConnectionInfoByFrom(msg.ChannelID, msg.ClientID); err != nil {
+	forwards, err := c.database.FindAllPeerConnectionInfoByFrom(msg.ChannelID, msg.ClientID)
+	if err != nil {
 		log.Printf("error occurs in finding connection info by from %v", err)
-	} else {
-		for _, forward := range forwards {
-			if forward.IsConnected() {
-				c.metric.DecrementPeerConnections()
-			}
-			log.Printf("publish closed")
-			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
-				Type:         response.CLOSED,
-				ConnectionID: forward.ID,
-			}); err != nil {
-				log.Printf("error occurs in publishing close message %v", err)
-			}
-			if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
-				log.Printf("error occurs in deleting connection info %v", err)
-			}
+	}
+	for _, forward := range forwards {
+		if forward.IsConnected() {
+			c.metric.DecrementPeerConnections()
+		}
+		log.Printf("publish closed")
+		if err := c.broker.Publish(broker.ClientSocket, broker.Detail(forward.ChannelID+forward.To), response.Closed{
+			Type:         response.CLOSED,
+			ConnectionID: forward.ID,
+		}); err != nil {
+			log.Printf("error occurs in publishing close message %v", err)
+		}
+		if err := c.database.DeleteConnectionInfoByID(forward.ID); err != nil {
+			log.Printf("error occurs in deleting connection info %v", err)
 		}
 	}
 
 	// 03. Find fetching connections. Because the forwarder don't know the fetcher left or just temporal issue.
 	// So we need to notify the forwarder that the fetcher left. Then Forwarder can clear the forwarding connection.
-	if fetches, err := c.database.FindAllPeerConnectionInfoByTo(msg.ChannelID, msg.ClientID); err != nil {
+	fetches, err := c.database.FindAllPeerConnectionInfoByTo(msg.ChannelID, msg.ClientID)
+	if err != nil {
 		log.Printf("error occurs in finding connection info by to %v", err)
-	} else {
-		for _, fetch := range fetches {
-			switch fetch.Type {
-			case database.PushToServer:
-				if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
-					ConnectionID: fetch.ID,
-				}); err != nil {
-					log.Printf("error occurs in publishing close message %v", err)
-				}
-			case database.PullFromServer:
-				if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
-					ConnectionID: fetch.ID,
-				}); err != nil {
-					log.Printf("error occurs in publishing close message %v", err)
-				}
-			case database.PeerToPeer:
-				if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
-					Type:         response.CLEAR,
-					ConnectionID: fetch.ID,
-				}); err != nil {
-					log.Printf("error occurs in publishing close message %v", err)
-				}
-				if fetch.IsConnected() {
-					c.metric.DecrementPeerConnections()
-					if err := c.pool.UpdateClientScore(fetch.From, fetch.ChannelID, c.config.MaxForwardingNumber); err != nil {
-						log.Printf("error occurs in updating client score %v", err)
-					}
-				}
-			default:
-				panic("unhandled default case")
+	}
+	for _, fetch := range fetches {
+		if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
+			log.Printf("error occurs in deleting connection info %v", err)
+		}
+		switch fetch.Type {
+		case database.PushToServer:
+			if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
+				ConnectionID: fetch.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
 			}
+		case database.PullFromServer:
+			if err := c.broker.Publish(broker.Media, broker.CLEAR, message.Clear{
+				ConnectionID: fetch.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
+			}
+		case database.PeerToPeer:
+			if err := c.broker.Publish(broker.ClientSocket, broker.Detail(fetch.ChannelID+fetch.From), response.Clear{
+				Type:         response.CLEAR,
+				ConnectionID: fetch.ID,
+			}); err != nil {
+				log.Printf("error occurs in publishing close message %v", err)
+			}
+			if fetch.IsConnected() {
+				c.metric.DecrementPeerConnections()
+				if err := c.pool.UpdateClientScore(fetch.From, fetch.ChannelID, c.config.MaxForwardingNumber); err != nil {
+					log.Printf("error occurs in updating client score %v", err)
+				}
+			}
+		default:
+			panic("unhandled default case")
+		}
 
-			if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
-				log.Printf("error occurs in deleting connection info %v", err)
-			}
+		if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
+			log.Printf("error occurs in deleting connection info %v", err)
 		}
 	}
 
 	if err := c.database.DeleteClientInfoByID(msg.ChannelID, msg.ClientID); err != nil {
 		log.Printf("error occurs in deleting client info %v", err)
+	}
+
+	connInfo, err := c.database.FindUpstreamInfo(msg.ChannelID)
+	if err != nil {
+		log.Printf("error occurs in finding upstream info %v", err)
+	}
+	if connInfo.From == msg.ClientID {
+		if err := c.broker.Publish(broker.Media, broker.CLOSE, message.Close{
+			ConnectionID: connInfo.ID,
+		}); err != nil {
+			log.Printf("error occurs in publishing close message %v", err)
+		}
+		if err := c.database.DeleteConnectionInfoByID(connInfo.ID); err != nil {
+			log.Printf("error occurs in deleting connection info %v", err)
+		}
+		if err := c.database.DeleteChannelInfoByID(msg.ChannelID); err != nil {
+			log.Printf("error occurs in deleting channel info %v", err)
+		}
 	}
 }
 

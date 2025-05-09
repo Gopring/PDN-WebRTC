@@ -55,16 +55,25 @@ func (d *DB) EnsureDefaultChannelInfo(channelID, channelKey string) error {
 	return nil
 }
 
-// FindChannelInfoByID finds a channel by its ID.
-func (d *DB) FindChannelInfoByID(id string) (*database.ChannelInfo, error) {
-	txn := d.db.Txn(false)
+// FindOrCreateChannelInfoByID finds a channel by its ID.
+func (d *DB) FindOrCreateChannelInfoByID(id string) (*database.ChannelInfo, error) {
+	txn := d.db.Txn(true)
 	defer txn.Abort()
 	raw, err := txn.First(tblChannels, idxChannelID, id)
 	if err != nil {
 		return nil, fmt.Errorf("find project by public key: %w", err)
 	}
 	if raw == nil {
-		return nil, fmt.Errorf("%s: %w", id, database.ErrChannelNotFound)
+		// Channel not found, create a new one
+		info := &database.ChannelInfo{
+			ID:  id,
+			Key: id,
+		}
+		if err := txn.Insert(tblChannels, info); err != nil {
+			return nil, fmt.Errorf("insert channel: %w", err)
+		}
+		txn.Commit()
+		return info.DeepCopy(), nil
 	}
 
 	return raw.(*database.ChannelInfo).DeepCopy(), nil
@@ -92,6 +101,24 @@ func (d *DB) FindAllChannelInfos() ([]*database.ChannelInfo, error) {
 	}
 
 	return channelInfos, nil
+}
+
+// DeleteChannelInfoByID deletes a channel by its ID.
+func (d *DB) DeleteChannelInfoByID(id string) error {
+	txn := d.db.Txn(true)
+	defer txn.Abort()
+	raw, err := txn.First(tblChannels, idxChannelID, id)
+	if err != nil {
+		return fmt.Errorf("find channel by channelID: %w", err)
+	}
+	if raw == nil {
+		return fmt.Errorf("%s: %w", id, database.ErrChannelNotFound)
+	}
+	if err := txn.Delete(tblChannels, raw); err != nil {
+		return fmt.Errorf("delete channel: %w", err)
+	}
+	txn.Commit()
+	return nil
 }
 
 // CreateClientInfo creates a new user if it doesn't exist.

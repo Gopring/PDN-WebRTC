@@ -34,6 +34,7 @@ const (
 	DISCONNECTED Detail = "DISCONNECTED"
 	FAILED       Detail = "FAILED"
 	CLEAR        Detail = "CLEAR"
+	CLOSE        Detail = "CLOSE"
 )
 
 // Broker is a message broker that manages message channels and subscriptions.

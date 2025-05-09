@@ -9,7 +9,7 @@ import (
 
 const (
 	// DefaultPort is the default port number for the server.
-	DefaultPort = 8080
+	DefaultPort = 7070
 )
 
 // Below is the Error message for the server.

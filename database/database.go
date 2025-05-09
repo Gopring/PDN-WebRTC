@@ -7,10 +7,10 @@ import (
 
 const (
 	// DefaultChannelID is the default channel ID. it is registered if flag is set.
-	DefaultChannelID = "channel-id"
+	DefaultChannelID = "7"
 
 	// DefaultChannelKey is the default channel key. it is registered if flag is set.
-	DefaultChannelKey = "channel-key"
+	DefaultChannelKey = "7"
 
 	// MediaServerID is the default media server ID. It is used for From or To in ConnectionInfo.
 	MediaServerID = "media-server-id"
@@ -42,8 +42,9 @@ var (
 // Database is an interface for database operations.
 type Database interface {
 	EnsureDefaultChannelInfo(channelID, channelKey string) error
-	FindChannelInfoByID(id string) (*ChannelInfo, error)
+	FindOrCreateChannelInfoByID(id string) (*ChannelInfo, error)
 	FindAllChannelInfos() ([]*ChannelInfo, error)
+	DeleteChannelInfoByID(id string) error
 	CreateClientInfo(channelID, clientID string) error
 	DeleteClientInfoByID(channelID, clientID string) error
 	FindClientInfoByID(channelID, clientID string) (*ClientInfo, error)

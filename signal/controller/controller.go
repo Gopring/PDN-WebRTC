@@ -93,7 +93,7 @@ func (c *Controller) authenticate(conn *websocket.Conn) (string, string, error) 
 	}
 
 	// 02. Authenticate the channel
-	channelInfo, err := c.database.FindChannelInfoByID(payload.ChannelID)
+	channelInfo, err := c.database.FindOrCreateChannelInfoByID(payload.ChannelID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to find channel info: %w", err)
 	}
