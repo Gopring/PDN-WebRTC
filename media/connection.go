@@ -6,15 +6,25 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/interceptor/pkg/intervalpli"
 	"github.com/pion/webrtc/v4"
+	"log"
 )
 
 // NewInboundConnection creates a new inbound connection.
-func NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
+func (med *Media) NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
 		return nil, fmt.Errorf("failed to register default codecs: %w", err)
 	}
+	s := webrtc.SettingEngine{}
 
+	// note: see https://stackoverflow.com/questions/68959096/pion-custom-sfu-server-not-working-inside-docker
+	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
+	log.Printf("IP : %s", med.config.IP)
+
+	err := med.config.SetPortRange(&s)
+	if err != nil {
+		log.Fatalf("Error setting port range: %v", err)
+	}
 	// This is the user configurable RTP/RTCP Pipeline.
 	// This provides NACKs, RTCP Reports and other features. If you use `webrtc.NewPeerConnection`
 	// this is enabled by default. If you are manually managing You MUST create a InterceptorRegistry
@@ -36,8 +46,11 @@ func NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, 
 	i.Add(intervalPliFactory)
 
 	// Create a new RTCPeerConnection
-	peerConnection, err := webrtc.NewAPI(webrtc.WithMediaEngine(m),
-		webrtc.WithInterceptorRegistry(i)).NewPeerConnection(config)
+	peerConnection, err := webrtc.NewAPI(
+		webrtc.WithMediaEngine(m),
+		webrtc.WithInterceptorRegistry(i),
+		webrtc.WithSettingEngine(s),
+	).NewPeerConnection(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
 	}
@@ -46,12 +59,19 @@ func NewInboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, 
 }
 
 // NewOutboundConnection creates a new outbound connection.
-func NewOutboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
-	peerConnection, err := webrtc.NewPeerConnection(config)
+func (med *Media) NewOutboundConnection(config webrtc.Configuration) (*webrtc.PeerConnection, error) {
+	s := webrtc.SettingEngine{}
+	s.SetNAT1To1IPs([]string{med.config.IP}, webrtc.ICECandidateTypeHost)
+	log.Printf("IP : %s", med.config.IP)
+	err := med.config.SetPortRange(&s)
+	if err != nil {
+		log.Fatalf("Error setting port range: %v", err)
+	}
+
+	peerConnection, err := webrtc.NewAPI(webrtc.WithSettingEngine(s)).NewPeerConnection(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
 	}
-
 	return peerConnection, nil
 }
 

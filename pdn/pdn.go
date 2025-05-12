@@ -29,7 +29,7 @@ func New(config Config) *PDN {
 	met := metric.New(config.Metrics)
 	brk := broker.New()
 	db := memory.New(config.Database)
-	med := media.New(brk, met)
+	med := media.New(config.Media, brk, met)
 	pl := pool.New(db)
 	cod := coordinator.New(config.Coordinator, brk, met, db, pl)
 	sig := signal.New(config.Signal, db, brk, met)

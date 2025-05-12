@@ -9,6 +9,7 @@ import (
 	"os"
 	"pdn/coordinator"
 	"pdn/database"
+	"pdn/media"
 	"pdn/metric"
 	"pdn/pdn"
 	"pdn/signal"
@@ -45,6 +46,7 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 	db := database.Config{}
 	cor := coordinator.Config{}
 	met := metric.Config{}
+	med := media.Config{}
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.SetOutput(w)
 	fs.IntVar(&sig.Port, "port", signal.DefaultPort, "listening port")
@@ -58,6 +60,9 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		coordinator.DefaultSetPeerConnection, "set peer assisted delivery network mode")
 	fs.IntVar(&met.Port, "metricPort", metric.DefaultMetricsPort, "listening port")
 	fs.StringVar(&met.Path, "metricPath", metric.DefaultMetricsPath, "metrics path")
+	fs.StringVar(&med.IP, "IP", os.Getenv("IP"), "ip")
+	fs.StringVar(&med.MinUdpPort, "minUdpPort", os.Getenv("MinUdpPort"), "minimum UDP port for WebRTC")
+	fs.StringVar(&med.MaxUdpPort, "maxUdpPort", os.Getenv("MaxUdpPort"), "maximum UDP port for WebRTC")
 	err := fs.Parse(args)
 	if err != nil {
 		return pdn.Config{}, fmt.Errorf("failed to parse args: %w", err)
@@ -72,5 +77,6 @@ func Parse(w io.Writer, args []string) (pdn.Config, error) {
 		Database:    db,
 		Coordinator: cor,
 		Metrics:     met,
+		Media:       med,
 	}, nil
 }

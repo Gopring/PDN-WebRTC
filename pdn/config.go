@@ -4,6 +4,7 @@ package pdn
 import (
 	"pdn/coordinator"
 	"pdn/database"
+	"pdn/media"
 	"pdn/metric"
 	"pdn/signal"
 )
@@ -14,4 +15,5 @@ type Config struct {
 	Database    database.Config
 	Coordinator coordinator.Config
 	Metrics     metric.Config
+	Media       media.Config
 }
