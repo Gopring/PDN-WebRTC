@@ -12,7 +12,12 @@ services:
       - "8080:8080"
       - "9090:9090"
       - "${MinUdpPort}-${MaxUdpPort}:${MinUdpPort}-${MaxUdpPort}/udp"
-    command: --setDefaultChannel --setPeerConnection --maxForwardingNumber=3
+    command: |
+      --setDefaultChannel
+      --setPeerConnection
+      --maxForwardingNumber=3
+      --cert=/etc/letsencrypt/live/pdn.window9u.me/fullchain.pem
+      --key=/etc/letsencrypt/live/pdn.window9u.me/privkey.pem
     restart: unless-stopped
 
   prometheus:

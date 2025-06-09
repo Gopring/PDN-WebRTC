@@ -12,6 +12,7 @@ import (
 	"pdn/pool"
 	"pdn/types/client/response"
 	"pdn/types/message"
+	"runtime/debug"
 )
 
 var (
@@ -41,6 +42,13 @@ func New(c Config, b *broker.Broker, m *metric.Metrics, db database.Database, p 
 
 // Start starts the Coordinator instance.
 func (c *Coordinator) Start() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("!!! PANIC RECOVERED in handleDeactivate goroutine: %v", r)
+			log.Printf("Stack trace:\n%s", debug.Stack())
+		}
+	}()
+
 	activateEvent := c.broker.Subscribe(broker.Client, broker.ACTIVATE)
 	deactivateEvent := c.broker.Subscribe(broker.Client, broker.DEACTIVATE)
 	pushEvent := c.broker.Subscribe(broker.Client, broker.PUSH)

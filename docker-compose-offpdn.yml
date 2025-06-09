@@ -1,0 +1,47 @@
+services:
+  pdn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - IP=${IP}
+      - MinUdpPort=${MinUdpPort:-49152}
+      - MaxUdpPort=${MaxUdpPort:-49172}
+    container_name: pdn-server
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+      - "${MinUdpPort}-${MaxUdpPort}:${MinUdpPort}-${MaxUdpPort}/udp"
+    command: |
+      --cert=/etc/letsencrypt/live/pdn.window9u.me/fullchain.pem
+      --key=/etc/letsencrypt/live/pdn.window9u.me/privkey.pem
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9091:9090"
+    restart: unless-stopped
+    volumes:
+      - ./metric/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prom_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grafana
+    volumes:
+      - ./metric/grafana:/etc/grafana/provisioning/datasources
+
+volumes:
+  prom_data:
