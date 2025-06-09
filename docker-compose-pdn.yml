@@ -9,7 +9,7 @@ services:
       - MaxUdpPort=${MaxUdpPort:-49172}
     container_name: pdn-server
     ports:
-      - "8080:8080"
+      - "7777:7070"
       - "9090:9090"
       - "${MinUdpPort}-${MaxUdpPort}:${MinUdpPort}-${MaxUdpPort}/udp"
     command: |
