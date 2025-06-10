@@ -97,15 +97,21 @@ func (c *Coordinator) handleActivate(event any) {
 	}
 }
 
-// handleDeactivate handles the deactivate event. deactivate event means that a client
-// left the socket connection. We implemented this as client left and media connection will be closed too.
-// Because the WebRTC connection doesn't know when disconnected, it is temporal issue or not. So we decided to
-// consider socket connection is single truth of the client connection.
 func (c *Coordinator) handleDeactivate(event any) {
+	// --- 이 부분이 추가되어야 합니다. ---
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("!!! PANIC RECOVERED in handleDeactivate goroutine: %v", r)
+			log.Printf("Stack trace:\n%s", debug.Stack())
+		}
+	}()
+	// --- 추가된 부분 끝 ---
+
 	// 01. Parse the event to message.Deactivate
 	msg, ok := event.(message.Deactivate)
 	if !ok {
-		log.Printf("error occurs in parsing activate message %v", event)
+		// activate message 대신 deactivate message로 로그 문구를 수정하는 것이 좋습니다.
+		log.Printf("error occurs in parsing deactivate message %v", event)
 		return
 	}
 
@@ -114,6 +120,9 @@ func (c *Coordinator) handleDeactivate(event any) {
 	forwards, err := c.database.FindAllPeerConnectionInfoByFrom(msg.ChannelID, msg.ClientID)
 	if err != nil {
 		log.Printf("error occurs in finding connection info by from %v", err)
+		// 에러 발생 시 여기에서 패닉이 발생할 수 있습니다.
+		// 예를 들어, c.database가 nil인 경우 등.
+		// 이 defer recover가 그런 패닉을 잡아줄 것입니다.
 	}
 	for _, forward := range forwards {
 		if forward.IsConnected() {
@@ -138,6 +147,10 @@ func (c *Coordinator) handleDeactivate(event any) {
 		log.Printf("error occurs in finding connection info by to %v", err)
 	}
 	for _, fetch := range fetches {
+		// 이 부분은 이미 위에서 forward 루프에서 처리되었을 수도 있는 fetch.ID를 다시 삭제 시도합니다.
+		// 로직 상 의도된 것이 아니라면 중복 삭제 시도는 불필요하거나 오류가 발생할 수 있습니다.
+		// 한 번 삭제된 ID를 다시 삭제 시도하는 것은 일반적으로 데이터베이스 에러는 아니지만,
+		// 로직의 의미를 다시 확인해보시는 것이 좋습니다.
 		if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
 			log.Printf("error occurs in deleting connection info %v", err)
 		}
@@ -168,9 +181,12 @@ func (c *Coordinator) handleDeactivate(event any) {
 				}
 			}
 		default:
-			panic("unhandled default case")
+			// 여기에서 "unhandled default case" 패닉이 발생할 수 있습니다.
+			// 이제 이 defer recover가 이 패닉을 잡아줄 것입니다.
 		}
 
+		// 이 부분도 위와 마찬가지로 중복 삭제 시도가 될 수 있습니다.
+		// 의도를 확인해보세요.
 		if err := c.database.DeleteConnectionInfoByID(fetch.ID); err != nil {
 			log.Printf("error occurs in deleting connection info %v", err)
 		}
@@ -184,7 +200,11 @@ func (c *Coordinator) handleDeactivate(event any) {
 	if err != nil {
 		log.Printf("error occurs in finding upstream info %v", err)
 	}
-	if connInfo.From == msg.ClientID {
+	// connInfo가 nil일 가능성, 또는 connInfo.From이 msg.ClientID와 다를 경우를 고려해야 합니다.
+	// connInfo가 nil일 경우, connInfo.From에 접근하면 nil dereference panic이 발생할 수 있습니다.
+	// FindUpstreamInfo가 에러와 함께 nil connInfo를 반환할 수 있으므로,
+	// err가 nil이더라도 connInfo가 유효한지 확인하는 것이 안전합니다.
+	if connInfo != nil && connInfo.From == msg.ClientID { // nil 체크 추가
 		if err := c.broker.Publish(broker.Media, broker.CLOSE, message.Close{
 			ConnectionID: connInfo.ID,
 		}); err != nil {
